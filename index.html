@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#2D5E3F">
+<title>Sticky Notes</title>
+<link rel="manifest" href="manifest.json">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(135deg, #2D5E3F 0%, #5A9E6B 30%, #8FBF7A 60%, #E8B84C 85%, #FCEAAA 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* 상단 툴바 */
+.toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: rgba(35,75,50,0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  z-index: 9999;
+  gap: 6px;
+}
+
+.toolbar-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  margin-right: 8px;
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+}
+
+.btn {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.btn:hover { background: rgba(255,255,255,0.35); }
+.btn:active { background: rgba(255,255,255,0.4); }
+
+.color-picker {
+  display: flex;
+  gap: 4px;
+  margin-left: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.color-picker::-webkit-scrollbar { display: none; }
+
+.color-dot {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.color-dot:hover, .color-dot.active {
+  transform: scale(1.2);
+  border-color: #fff;
+}
+
+.toolbar-right {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.search-box {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 140px;
+  outline: none;
+}
+.search-box::placeholder { color: rgba(255,255,255,0.6); }
+.search-box:focus { background: rgba(255,255,255,0.3); }
+
+/* 노트 영역 */
+.notes-area {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* 스티키 노트 */
+.note {
+  position: absolute;
+  width: 240px;
+  min-height: 180px;
+  border-radius: 4px;
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.2s;
+  overflow: hidden;
+}
+.note:hover { box-shadow: 5px 5px 18px rgba(0,0,0,0.35); }
+.note.dragging { opacity: 0.85; box-shadow: 8px 8px 24px rgba(0,0,0,0.4); z-index: 9998 !important; }
+.note.hidden-note { display: none; }
+
+.note-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  cursor: grab;
+  gap: 4px;
+  background: rgba(0,0,0,0.08);
+}
+
+.note-title-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(0,0,0,0.7);
+  outline: none;
+  min-width: 0;
+}
+
+.note-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: rgba(0,0,0,0.4);
+  padding: 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.note-btn:hover { background: rgba(0,0,0,0.1); color: rgba(0,0,0,0.7); }
+
+.note-body {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(0,0,0,0.75);
+  outline: none;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.note-footer {
+  padding: 4px 8px;
+  font-size: 10px;
+  color: rgba(0,0,0,0.3);
+  text-align: right;
+}
+
+/* 리사이즈 핸들 */
+.note-resize {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 24px;
+  height: 24px;
+  cursor: nwse-resize;
+  opacity: 0.3;
+}
+.note-resize::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid rgba(0,0,0,0.4);
+  border-bottom: 2px solid rgba(0,0,0,0.4);
+}
+
+/* 색상 팔레트 팝업 */
+.palette-popup {
+  position: absolute;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  display: none;
+  z-index: 10000;
+  gap: 4px;
+  flex-wrap: wrap;
+  width: 130px;
+}
+.palette-popup.show { display: flex; }
+.palette-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #eee;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.palette-dot:hover { transform: scale(1.15); border-color: #999; }
+
+/* 빈 상태 */
+.empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: rgba(255,255,255,0.6);
+  padding: 20px;
+}
+.empty-state h2 { font-size: 22px; margin-bottom: 8px; }
+.empty-state p { font-size: 14px; }
+
+/* 모바일 반응형 */
+@media (max-width: 600px) {
+  .toolbar {
+    height: 44px;
+    padding: 0 8px;
+    gap: 4px;
+    flex-wrap: wrap;
+    height: auto;
+    padding-bottom: 0;
+  }
+
+  .toolbar-title { font-size: 14px; margin-right: 4px; }
+
+  .search-box { width: 100px; font-size: 12px; padding: 4px 8px; }
+
+  /* 색상 선택기: 툴바 아래 별도 줄 + 스와이프 */
+  .color-picker {
+    order: 10;
+    width: 100%;
+    margin: 6px 0 8px 0;
+    gap: 8px;
+    padding: 4px 8px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    justify-content: center;
+  }
+
+  .color-dot {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-width: 3px;
+    scroll-snap-align: center;
+  }
+  .color-dot.active {
+    transform: scale(1.15);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  .notes-area { top: 92px; }
+
+  .note {
+    width: calc(100vw - 20px) !important;
+    min-height: 140px !important;
+    left: 10px !important;
+    position: relative !important;
+    margin-bottom: 12px;
+    top: auto !important;
+  }
+
+  .notes-area {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 0;
+    overflow-y: auto;
+    align-items: center;
+  }
+
+  .note.dragging { opacity: 1; }
+  .note-resize { display: none; }
+
+  .note-body { font-size: 15px; }
+
+  .empty-state { position: relative; top: auto; left: auto; transform: none; margin-top: 25vh; }
+}
+
+/* 설치 배너 */
+.install-banner {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(35,75,50,0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 13px;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  z-index: 10001;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+.install-banner.show { display: flex; }
+.install-btn {
+  background: #fff;
+  color: #333;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.install-dismiss {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 4px;
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="toolbar-title">Sticky Notes</span>
+  <button class="btn" id="addBtn">+ 새 메모</button>
+  <div class="color-picker" id="colorPicker"></div>
+  <div class="toolbar-right">
+    <input type="text" class="search-box" id="searchBox" placeholder="검색...">
+    <button class="btn" id="clearSearchBtn" style="display:none;">X</button>
+  </div>
+</div>
+
+<div class="notes-area" id="notesArea">
+  <div class="empty-state" id="emptyState">
+    <h2>메모가 없습니다</h2>
+    <p>"+ 새 메모" 버튼을 눌러 시작하세요!</p>
+  </div>
+</div>
+
+<div class="palette-popup" id="palettePopup"></div>
+
+<div class="install-banner" id="installBanner">
+  <span>홈 화면에 추가하시겠어요?</span>
+  <button class="install-btn" id="installBtn">설치</button>
+  <button class="install-dismiss" id="installDismiss">✕</button>
+</div>
+
+<script>
+const COLORS = [
+  { name: '크림', hex: '#FCEAAA' },
+  { name: '골드', hex: '#E8C86C' },
+  { name: '연초록', hex: '#B8D9A0' },
+  { name: '세이지', hex: '#8FBF7A' },
+  { name: '초록', hex: '#6DA870' },
+  { name: '진초록', hex: '#4A8C5E' },
+  { name: '포레스트', hex: '#A8D5BA' },
+  { name: '흰색', hex: '#FFFFFF' },
+];
+
+const STORAGE_KEY = 'sticky-notes-data';
+const isMobile = window.innerWidth <= 600;
+
+let notes = [];
+let selectedColor = COLORS[0].hex;
+let nextZ = 100;
+let dragState = null;
+let resizeState = null;
+let saveTimeout = null;
+
+// localStorage
+function loadNotes() {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch { return []; }
+}
+
+function scheduleSave() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+  }, 300);
+}
+
+function init() {
+  buildColorPicker();
+  buildPalettePopup();
+  notes = loadNotes();
+  renderAll();
+  setupEvents();
+  setupPWA();
+}
+
+function buildColorPicker() {
+  const cp = document.getElementById('colorPicker');
+  COLORS.forEach(c => {
+    const dot = document.createElement('div');
+    dot.className = 'color-dot' + (c.hex === selectedColor ? ' active' : '');
+    dot.style.background = c.hex;
+    dot.title = c.name;
+    dot.addEventListener('click', () => {
+      selectedColor = c.hex;
+      cp.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+      dot.classList.add('active');
+    });
+    cp.appendChild(dot);
+  });
+}
+
+function buildPalettePopup() {
+  const pp = document.getElementById('palettePopup');
+  COLORS.forEach(c => {
+    const dot = document.createElement('div');
+    dot.className = 'palette-dot';
+    dot.style.background = c.hex;
+    dot.dataset.color = c.hex;
+    pp.appendChild(dot);
+  });
+}
+
+function renderAll() {
+  const area = document.getElementById('notesArea');
+  area.querySelectorAll('.note').forEach(n => n.remove());
+  notes.forEach((note, i) => area.appendChild(createNoteEl(note, i)));
+  updateEmpty();
+}
+
+function updateEmpty() {
+  document.getElementById('emptyState').style.display = notes.length === 0 ? 'block' : 'none';
+}
+
+function createNoteEl(note, idx) {
+  const el = document.createElement('div');
+  el.className = 'note';
+  el.dataset.idx = idx;
+  if (!isMobile) {
+    el.style.left = note.x + 'px';
+    el.style.top = note.y + 'px';
+    el.style.width = (note.w || 240) + 'px';
+    el.style.minHeight = (note.h || 180) + 'px';
+  }
+  el.style.background = note.color;
+  el.style.zIndex = note.z || nextZ++;
+
+  const ts = new Date(note.created).toLocaleDateString('ko-KR', {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+
+  el.innerHTML = `
+    <div class="note-header">
+      <input class="note-title-input" value="${escHtml(note.title || '')}" placeholder="제목..." data-field="title">
+      <button class="note-btn note-palette-btn" title="색상 변경">🎨</button>
+      <button class="note-btn note-dup-btn" title="복제">📋</button>
+      <button class="note-btn note-del-btn" title="삭제">✕</button>
+    </div>
+    <div class="note-body" contenteditable="true" data-field="body">${escHtml(note.body || '')}</div>
+    <div class="note-footer">${ts}</div>
+    <div class="note-resize"></div>
+  `;
+  return el;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getPointerPos(e) {
+  if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  if (e.changedTouches && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+  return { x: e.clientX, y: e.clientY };
+}
+
+function setupEvents() {
+  const area = document.getElementById('notesArea');
+
+  document.getElementById('addBtn').addEventListener('click', addNote);
+
+  // 검색
+  const searchBox = document.getElementById('searchBox');
+  const clearBtn = document.getElementById('clearSearchBtn');
+  searchBox.addEventListener('input', () => {
+    const q = searchBox.value.toLowerCase();
+    clearBtn.style.display = q ? 'inline-block' : 'none';
+    area.querySelectorAll('.note').forEach(el => {
+      const idx = +el.dataset.idx;
+      const note = notes[idx];
+      const match = !q || (note.title + ' ' + note.body).toLowerCase().includes(q);
+      el.classList.toggle('hidden-note', !match);
+    });
+  });
+  clearBtn.addEventListener('click', () => {
+    searchBox.value = '';
+    clearBtn.style.display = 'none';
+    area.querySelectorAll('.note').forEach(el => el.classList.remove('hidden-note'));
+  });
+
+  // 마우스 + 터치 이벤트
+  function onPointerDown(e) {
+    const noteEl = e.target.closest('.note');
+    if (!noteEl) return;
+    const idx = +noteEl.dataset.idx;
+
+    if (e.target.closest('.note-del-btn')) {
+      noteEl.remove();
+      notes.splice(idx, 1);
+      reindex();
+      updateEmpty();
+      scheduleSave();
+      return;
+    }
+    if (e.target.closest('.note-dup-btn')) {
+      duplicateNote(idx);
+      return;
+    }
+    if (e.target.closest('.note-palette-btn')) {
+      showPalette(noteEl, idx);
+      return;
+    }
+
+    if (!isMobile) {
+      const pos = getPointerPos(e);
+
+      if (e.target.closest('.note-resize')) {
+        resizeState = { el: noteEl, idx, startX: pos.x, startY: pos.y,
+          startW: noteEl.offsetWidth, startH: noteEl.offsetHeight };
+        e.preventDefault();
+        return;
+      }
+
+      if (e.target.closest('.note-header') && !e.target.closest('input')) {
+        noteEl.style.zIndex = ++nextZ;
+        notes[idx].z = nextZ;
+        dragState = { el: noteEl, idx, offX: pos.x - noteEl.offsetLeft, offY: pos.y - noteEl.offsetTop };
+        noteEl.classList.add('dragging');
+        e.preventDefault();
+      }
+
+      noteEl.style.zIndex = ++nextZ;
+      notes[idx].z = nextZ;
+    }
+  }
+
+  function onPointerMove(e) {
+    if (dragState) {
+      const pos = getPointerPos(e);
+      const x = pos.x - dragState.offX;
+      const y = pos.y - dragState.offY;
+      dragState.el.style.left = x + 'px';
+      dragState.el.style.top = y + 'px';
+      notes[dragState.idx].x = x;
+      notes[dragState.idx].y = y;
+    }
+    if (resizeState) {
+      const pos = getPointerPos(e);
+      const w = Math.max(180, resizeState.startW + (pos.x - resizeState.startX));
+      const h = Math.max(120, resizeState.startH + (pos.y - resizeState.startY));
+      resizeState.el.style.width = w + 'px';
+      resizeState.el.style.minHeight = h + 'px';
+      notes[resizeState.idx].w = w;
+      notes[resizeState.idx].h = h;
+    }
+  }
+
+  function onPointerUp() {
+    if (dragState) {
+      dragState.el.classList.remove('dragging');
+      dragState = null;
+      scheduleSave();
+    }
+    if (resizeState) {
+      resizeState = null;
+      scheduleSave();
+    }
+  }
+
+  // 마우스
+  area.addEventListener('mousedown', onPointerDown);
+  document.addEventListener('mousemove', onPointerMove);
+  document.addEventListener('mouseup', onPointerUp);
+
+  // 터치
+  area.addEventListener('touchstart', onPointerDown, { passive: false });
+  document.addEventListener('touchmove', onPointerMove, { passive: false });
+  document.addEventListener('touchend', onPointerUp);
+
+  // 내용 변경
+  area.addEventListener('input', e => {
+    const noteEl = e.target.closest('.note');
+    if (!noteEl) return;
+    const idx = +noteEl.dataset.idx;
+    if (e.target.dataset.field === 'title') notes[idx].title = e.target.value;
+    else if (e.target.dataset.field === 'body') notes[idx].body = e.target.innerText;
+    scheduleSave();
+  });
+
+  // 팔레트 닫기
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.palette-popup') && !e.target.closest('.note-palette-btn')) {
+      document.getElementById('palettePopup').classList.remove('show');
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'n') { e.preventDefault(); addNote(); }
+  });
+}
+
+function addNote() {
+  const area = document.getElementById('notesArea');
+  const x = 40 + (notes.length % 6) * 30;
+  const y = 20 + (notes.length % 5) * 30;
+  const note = {
+    title: '', body: '', color: selectedColor,
+    x, y, w: 240, h: 180, z: ++nextZ,
+    created: new Date().toISOString(),
+  };
+  notes.push(note);
+  const el = createNoteEl(note, notes.length - 1);
+  area.appendChild(el);
+  el.querySelector('.note-body').focus();
+  updateEmpty();
+  scheduleSave();
+}
+
+function duplicateNote(idx) {
+  const src = notes[idx];
+  const note = { ...src, x: src.x + 20, y: src.y + 20, z: ++nextZ, created: new Date().toISOString() };
+  notes.push(note);
+  document.getElementById('notesArea').appendChild(createNoteEl(note, notes.length - 1));
+  scheduleSave();
+}
+
+function showPalette(noteEl, idx) {
+  const pp = document.getElementById('palettePopup');
+  const rect = noteEl.querySelector('.note-palette-btn').getBoundingClientRect();
+  pp.style.left = Math.min(rect.left, window.innerWidth - 140) + 'px';
+  pp.style.top = (rect.bottom + 4) + 'px';
+  pp.classList.add('show');
+  pp.onclick = e => {
+    const dot = e.target.closest('.palette-dot');
+    if (!dot) return;
+    notes[idx].color = dot.dataset.color;
+    noteEl.style.background = dot.dataset.color;
+    pp.classList.remove('show');
+    scheduleSave();
+  };
+}
+
+function reindex() {
+  document.getElementById('notesArea').querySelectorAll('.note').forEach((el, i) => el.dataset.idx = i);
+}
+
+// PWA 설치
+let deferredPrompt = null;
+
+function setupPWA() {
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('installBanner').classList.add('show');
+  });
+
+  document.getElementById('installBtn').addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    document.getElementById('installBanner').classList.remove('show');
+  });
+
+  document.getElementById('installDismiss').addEventListener('click', () => {
+    document.getElementById('installBanner').classList.remove('show');
+  });
+
+  // 서비스워커 등록
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+}
+
+init();
+</script>
+</body>
+</html>
