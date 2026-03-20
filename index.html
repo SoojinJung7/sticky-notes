@@ -626,6 +626,8 @@ body {
     <p id="ppDesc">메모를 안전하게 암호화할 비밀 문구를 설정하세요. 다른 기기에서 로그인할 때 이 문구가 필요합니다.</p>
     <input type="password" class="passphrase-input" id="ppInput" placeholder="비밀 문구 입력...">
     <input type="password" class="passphrase-input" id="ppConfirm" placeholder="비밀 문구 확인...">
+    <input type="text" class="passphrase-input" id="ppHintInput" placeholder="복구 힌트 (예: 우리 강아지 이름+생일)" style="font-size:13px; letter-spacing:0;">
+    <div class="passphrase-hint" id="ppHintShow" style="font-size:12px; color:#5A9E6B; margin-bottom:10px; display:none;"></div>
     <div class="passphrase-error" id="ppError"></div>
     <button class="passphrase-submit" id="ppSubmit">확인</button>
   </div>
@@ -697,7 +699,7 @@ async function deriveWrappingKey(passphrase, salt) {
 }
 
 // 암호화 키를 비밀 문구로 래핑하여 Firestore에 저장
-async function wrapAndStoreKey(rawKeyB64, passphrase, uid) {
+async function wrapAndStoreKey(rawKeyB64, passphrase, hint, uid) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const wrappingKey = await deriveWrappingKey(passphrase, salt);
@@ -708,6 +710,7 @@ async function wrapAndStoreKey(rawKeyB64, passphrase, uid) {
     iv: toBase64(iv),
     wrappedKey: toBase64(wrapped),
   };
+  if (hint) keyData.hint = hint;
   await setDoc(doc(db, 'userKeys', uid), keyData);
 }
 
@@ -730,11 +733,13 @@ async function unwrapKey(passphrase, uid) {
 }
 
 // 비밀 문구 모달 표시 (Promise로 결과 반환)
-function askPassphrase(isNew) {
+function askPassphrase(isNew, hint) {
   return new Promise((resolve) => {
     const modal = document.getElementById('passphraseModal');
     const input = document.getElementById('ppInput');
     const confirm = document.getElementById('ppConfirm');
+    const hintInput = document.getElementById('ppHintInput');
+    const hintShow = document.getElementById('ppHintShow');
     const error = document.getElementById('ppError');
     const submit = document.getElementById('ppSubmit');
     const title = document.getElementById('ppTitle');
@@ -744,10 +749,20 @@ function askPassphrase(isNew) {
       title.textContent = '비밀 문구 설정';
       desc.textContent = '메모를 안전하게 암호화할 비밀 문구를 설정하세요. 다른 기기에서 로그인할 때 이 문구가 필요합니다.';
       confirm.style.display = '';
+      hintInput.style.display = '';
+      hintInput.value = '';
+      hintShow.style.display = 'none';
     } else {
       title.textContent = '비밀 문구 입력';
       desc.textContent = '메모를 복호화하려면 처음 설정한 비밀 문구를 입력하세요.';
       confirm.style.display = 'none';
+      hintInput.style.display = 'none';
+      if (hint) {
+        hintShow.textContent = '힌트: ' + hint;
+        hintShow.style.display = 'block';
+      } else {
+        hintShow.style.display = 'none';
+      }
     }
 
     input.value = '';
@@ -768,14 +783,14 @@ function askPassphrase(isNew) {
         error.style.display = 'block';
         return;
       }
+      const hintVal = isNew ? hintInput.value.trim() : null;
       modal.classList.add('hidden');
-      submit.removeEventListener('click', handler);
-      resolve(val);
+      resolve({ passphrase: val, hint: hintVal });
     };
     submit.onclick = handler;
-    // Enter 키 지원
     input.onkeydown = (e) => { if (e.key === 'Enter') { if (isNew) confirm.focus(); else handler(); } };
-    confirm.onkeydown = (e) => { if (e.key === 'Enter') handler(); };
+    confirm.onkeydown = (e) => { if (e.key === 'Enter') { if (isNew) hintInput.focus(); else handler(); } };
+    hintInput.onkeydown = (e) => { if (e.key === 'Enter') handler(); };
   });
 }
 
@@ -794,26 +809,30 @@ async function getCryptoKey(uid) {
 
   if (keySnap.exists()) {
     // 기존 유저: 비밀 문구로 키 복원
+    const hint = keySnap.data().hint || '';
+    let firstTry = true;
     while (true) {
-      const passphrase = await askPassphrase(false);
-      const unwrapped = await unwrapKey(passphrase, uid);
+      if (!firstTry) {
+        const error = document.getElementById('ppError');
+        error.textContent = '비밀 문구가 틀렸습니다. 다시 입력해주세요.';
+        error.style.display = 'block';
+      }
+      const result = await askPassphrase(false, hint);
+      const unwrapped = await unwrapKey(result.passphrase, uid);
       if (unwrapped) {
         localStorage.setItem(storageKey, unwrapped);
         const keyBytes = fromBase64(unwrapped);
         return await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
       }
-      // 틀렸으면 에러 표시 후 다시
-      const error = document.getElementById('ppError');
-      error.textContent = '비밀 문구가 틀렸습니다. 다시 입력해주세요.';
-      error.style.display = 'block';
+      firstTry = false;
     }
   } else {
     // 신규 유저: 키 생성 + 비밀 문구 설정
-    const passphrase = await askPassphrase(true);
+    const result = await askPassphrase(true);
     const rawKey = crypto.getRandomValues(new Uint8Array(32));
     rawKeyB64 = toBase64(rawKey);
     localStorage.setItem(storageKey, rawKeyB64);
-    await wrapAndStoreKey(rawKeyB64, passphrase, uid);
+    await wrapAndStoreKey(rawKeyB64, result.passphrase, result.hint, uid);
     return await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['encrypt', 'decrypt']);
   }
 }
