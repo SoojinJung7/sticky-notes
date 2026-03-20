@@ -20,6 +20,93 @@ body {
   touch-action: none;
 }
 
+/* 온보딩 */
+.onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  background: linear-gradient(135deg, #2D5E3F 0%, #5A9E6B 30%, #8FBF7A 60%, #E8B84C 85%, #FCEAAA 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+}
+.onboarding.hidden { display: none; }
+
+.onboarding-logo {
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.onboarding h1 {
+  color: #fff;
+  font-size: 26px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.onboarding p {
+  color: rgba(255,255,255,0.8);
+  font-size: 14px;
+  text-align: center;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+.onboarding-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+  margin-top: 12px;
+}
+
+.ob-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.ob-btn:active { transform: scale(0.97); }
+
+.ob-btn-google {
+  background: #fff;
+  color: #333;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+}
+.ob-btn-google:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+
+.ob-btn-google svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ob-btn-local {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.4);
+}
+.ob-btn-local:hover { background: rgba(255,255,255,0.3); }
+
+.ob-btn-desc {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.6;
+  margin-left: 4px;
+}
+
 /* 상단 툴바 */
 .toolbar {
   position: fixed;
@@ -106,6 +193,50 @@ body {
 }
 .search-box::placeholder { color: rgba(255,255,255,0.6); }
 .search-box:focus { background: rgba(255,255,255,0.3); }
+
+/* 유저 아바타 */
+.user-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.5);
+  cursor: pointer;
+  object-fit: cover;
+}
+
+.user-menu {
+  position: absolute;
+  top: 44px;
+  right: 12px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  display: none;
+  z-index: 10000;
+  min-width: 160px;
+}
+.user-menu.show { display: block; }
+.user-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: #333;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.user-menu-item:hover { background: #f0f0f0; }
+.user-menu-name {
+  padding: 8px 12px 4px;
+  font-size: 12px;
+  color: #999;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 4px;
+}
 
 /* 노트 영역 */
 .notes-area {
@@ -346,10 +477,51 @@ body {
   font-size: 18px;
   padding: 0 4px;
 }
+
+/* 로딩 스피너 */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 19999;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.loading-overlay.hidden { display: none; }
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 
+<!-- 온보딩 -->
+<div class="onboarding" id="onboarding">
+  <img class="onboarding-logo" src="icon-192.png" alt="logo">
+  <h1>Sticky Notes</h1>
+  <p>간편하게 메모를 작성하고 관리하세요</p>
+  <div class="onboarding-buttons">
+    <button class="ob-btn ob-btn-google" id="obGoogle">
+      <svg viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      Google로 로그인 <span class="ob-btn-desc">어디서나 동기화</span>
+    </button>
+    <button class="ob-btn ob-btn-local" id="obLocal">
+      이 기기에서만 사용 <span class="ob-btn-desc">로그인 없이</span>
+    </button>
+  </div>
+</div>
+
+<!-- 로딩 -->
+<div class="loading-overlay hidden" id="loadingOverlay"><div class="spinner"></div></div>
+
+<!-- 툴바 -->
 <div class="toolbar">
   <span class="toolbar-title">Sticky Notes</span>
   <button class="btn" id="addBtn">+ 새 메모</button>
@@ -357,7 +529,14 @@ body {
   <div class="toolbar-right">
     <input type="text" class="search-box" id="searchBox" placeholder="검색...">
     <button class="btn" id="clearSearchBtn" style="display:none;">X</button>
+    <img class="user-avatar" id="userAvatar" style="display:none;" alt="user">
   </div>
+</div>
+
+<!-- 유저 메뉴 -->
+<div class="user-menu" id="userMenu">
+  <div class="user-menu-name" id="userMenuName"></div>
+  <button class="user-menu-item" id="logoutBtn">로그아웃</button>
 </div>
 
 <div class="notes-area" id="notesArea">
@@ -375,7 +554,28 @@ body {
   <button class="install-dismiss" id="installDismiss">✕</button>
 </div>
 
-<script>
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAQ6H1_UdCaXAH2l4XqGuMGrt_ILAsUoIU",
+  authDomain: "stickynote-b705d.firebaseapp.com",
+  projectId: "stickynote-b705d",
+  storageBucket: "stickynote-b705d.firebasestorage.app",
+  messagingSenderId: "458922481738",
+  appId: "1:458922481738:web:c8c00af9914089d9efeeb3",
+  measurementId: "G-JZ5J3WW0KN"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+// ===== 상수 =====
 const COLORS = [
   { name: '크림', hex: '#FCEAAA' },
   { name: '골드', hex: '#E8C86C' },
@@ -388,6 +588,7 @@ const COLORS = [
 ];
 
 const STORAGE_KEY = 'sticky-notes-data';
+const MODE_KEY = 'sticky-notes-mode';
 const isMobile = window.innerWidth <= 600;
 
 let notes = [];
@@ -396,31 +597,185 @@ let nextZ = 100;
 let dragState = null;
 let resizeState = null;
 let saveTimeout = null;
+let currentUser = null;
+let authMode = localStorage.getItem(MODE_KEY); // 'google' | 'local' | null
 
-// localStorage
-function loadNotes() {
+// ===== 저장/불러오기 =====
+function loadNotesLocal() {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     return data ? JSON.parse(data) : [];
   } catch { return []; }
 }
 
+function saveNotesLocal(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+async function loadNotesCloud() {
+  if (!currentUser) return [];
+  try {
+    const snap = await getDoc(doc(db, 'users', currentUser.uid));
+    return snap.exists() ? (snap.data().notes || []) : [];
+  } catch (e) {
+    console.error('Cloud load error:', e);
+    return [];
+  }
+}
+
+async function saveNotesCloud(data) {
+  if (!currentUser) return;
+  try {
+    await setDoc(doc(db, 'users', currentUser.uid), { notes: data });
+  } catch (e) {
+    console.error('Cloud save error:', e);
+  }
+}
+
+async function loadNotes() {
+  if (authMode === 'google' && currentUser) {
+    return await loadNotesCloud();
+  }
+  return loadNotesLocal();
+}
+
 function scheduleSave() {
   clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+  saveTimeout = setTimeout(async () => {
+    if (authMode === 'google' && currentUser) {
+      saveNotesLocal(notes); // 로컬 백업도 유지
+      await saveNotesCloud(notes);
+    } else {
+      saveNotesLocal(notes);
+    }
   }, 300);
 }
 
-function init() {
-  buildColorPicker();
-  buildPalettePopup();
-  notes = loadNotes();
-  renderAll();
-  setupEvents();
-  setupPWA();
+// ===== 온보딩 =====
+function showOnboarding() {
+  document.getElementById('onboarding').classList.remove('hidden');
 }
 
+function hideOnboarding() {
+  document.getElementById('onboarding').classList.add('hidden');
+}
+
+function showLoading() {
+  document.getElementById('loadingOverlay').classList.remove('hidden');
+}
+
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.add('hidden');
+}
+
+// ===== 유저 UI =====
+function showUserUI(user) {
+  const avatar = document.getElementById('userAvatar');
+  avatar.src = user.photoURL || '';
+  avatar.style.display = user.photoURL ? 'block' : 'none';
+  document.getElementById('userMenuName').textContent = user.displayName || user.email;
+}
+
+function hideUserUI() {
+  document.getElementById('userAvatar').style.display = 'none';
+  document.getElementById('userMenu').classList.remove('show');
+}
+
+// ===== 초기화 =====
+async function init() {
+  buildColorPicker();
+  buildPalettePopup();
+  setupEvents();
+  setupPWA();
+
+  // 온보딩 분기
+  if (authMode === 'local') {
+    hideOnboarding();
+    notes = loadNotesLocal();
+    renderAll();
+  } else if (authMode === 'google') {
+    hideOnboarding();
+    showLoading();
+    // Firebase auth state가 결정될 때까지 기다림
+    onAuthStateChanged(auth, async (user) => {
+      hideLoading();
+      if (user) {
+        currentUser = user;
+        showUserUI(user);
+        notes = await loadNotesCloud();
+        renderAll();
+      } else {
+        // 토큰 만료 등 → 온보딩으로
+        authMode = null;
+        localStorage.removeItem(MODE_KEY);
+        showOnboarding();
+      }
+    });
+  } else {
+    // 첫 방문
+    showOnboarding();
+  }
+}
+
+// 온보딩 버튼
+document.getElementById('obGoogle').addEventListener('click', async () => {
+  showLoading();
+  try {
+    const result = await signInWithPopup(auth, provider);
+    currentUser = result.user;
+    authMode = 'google';
+    localStorage.setItem(MODE_KEY, 'google');
+    showUserUI(currentUser);
+    hideOnboarding();
+
+    // 로컬에 기존 메모가 있으면 클라우드로 마이그레이션
+    const localNotes = loadNotesLocal();
+    const cloudNotes = await loadNotesCloud();
+    if (localNotes.length > 0 && cloudNotes.length === 0) {
+      notes = localNotes;
+      await saveNotesCloud(notes);
+    } else {
+      notes = cloudNotes;
+    }
+    renderAll();
+  } catch (e) {
+    console.error('Login error:', e);
+    alert('로그인에 실패했습니다. 다시 시도해주세요.');
+  }
+  hideLoading();
+});
+
+document.getElementById('obLocal').addEventListener('click', () => {
+  authMode = 'local';
+  localStorage.setItem(MODE_KEY, 'local');
+  hideOnboarding();
+  notes = loadNotesLocal();
+  renderAll();
+});
+
+// 유저 메뉴
+document.getElementById('userAvatar').addEventListener('click', () => {
+  document.getElementById('userMenu').classList.toggle('show');
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await signOut(auth);
+  currentUser = null;
+  authMode = null;
+  localStorage.removeItem(MODE_KEY);
+  hideUserUI();
+  notes = [];
+  renderAll();
+  showOnboarding();
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#userAvatar') && !e.target.closest('#userMenu')) {
+    document.getElementById('userMenu').classList.remove('show');
+  }
+});
+
+// ===== UI 빌드 =====
 function buildColorPicker() {
   const cp = document.getElementById('colorPicker');
   COLORS.forEach(c => {
@@ -500,12 +855,12 @@ function getPointerPos(e) {
   return { x: e.clientX, y: e.clientY };
 }
 
+// ===== 이벤트 =====
 function setupEvents() {
   const area = document.getElementById('notesArea');
 
   document.getElementById('addBtn').addEventListener('click', addNote);
 
-  // 검색
   const searchBox = document.getElementById('searchBox');
   const clearBtn = document.getElementById('clearSearchBtn');
   searchBox.addEventListener('input', () => {
@@ -524,7 +879,6 @@ function setupEvents() {
     area.querySelectorAll('.note').forEach(el => el.classList.remove('hidden-note'));
   });
 
-  // 마우스 + 터치 이벤트
   function onPointerDown(e) {
     const noteEl = e.target.closest('.note');
     if (!noteEl) return;
@@ -538,25 +892,17 @@ function setupEvents() {
       scheduleSave();
       return;
     }
-    if (e.target.closest('.note-dup-btn')) {
-      duplicateNote(idx);
-      return;
-    }
-    if (e.target.closest('.note-palette-btn')) {
-      showPalette(noteEl, idx);
-      return;
-    }
+    if (e.target.closest('.note-dup-btn')) { duplicateNote(idx); return; }
+    if (e.target.closest('.note-palette-btn')) { showPalette(noteEl, idx); return; }
 
     if (!isMobile) {
       const pos = getPointerPos(e);
-
       if (e.target.closest('.note-resize')) {
         resizeState = { el: noteEl, idx, startX: pos.x, startY: pos.y,
           startW: noteEl.offsetWidth, startH: noteEl.offsetHeight };
         e.preventDefault();
         return;
       }
-
       if (e.target.closest('.note-header') && !e.target.closest('input')) {
         noteEl.style.zIndex = ++nextZ;
         notes[idx].z = nextZ;
@@ -564,7 +910,6 @@ function setupEvents() {
         noteEl.classList.add('dragging');
         e.preventDefault();
       }
-
       noteEl.style.zIndex = ++nextZ;
       notes[idx].z = nextZ;
     }
@@ -573,12 +918,10 @@ function setupEvents() {
   function onPointerMove(e) {
     if (dragState) {
       const pos = getPointerPos(e);
-      const x = pos.x - dragState.offX;
-      const y = pos.y - dragState.offY;
-      dragState.el.style.left = x + 'px';
-      dragState.el.style.top = y + 'px';
-      notes[dragState.idx].x = x;
-      notes[dragState.idx].y = y;
+      dragState.el.style.left = (pos.x - dragState.offX) + 'px';
+      dragState.el.style.top = (pos.y - dragState.offY) + 'px';
+      notes[dragState.idx].x = pos.x - dragState.offX;
+      notes[dragState.idx].y = pos.y - dragState.offY;
     }
     if (resizeState) {
       const pos = getPointerPos(e);
@@ -592,28 +935,17 @@ function setupEvents() {
   }
 
   function onPointerUp() {
-    if (dragState) {
-      dragState.el.classList.remove('dragging');
-      dragState = null;
-      scheduleSave();
-    }
-    if (resizeState) {
-      resizeState = null;
-      scheduleSave();
-    }
+    if (dragState) { dragState.el.classList.remove('dragging'); dragState = null; scheduleSave(); }
+    if (resizeState) { resizeState = null; scheduleSave(); }
   }
 
-  // 마우스
   area.addEventListener('mousedown', onPointerDown);
   document.addEventListener('mousemove', onPointerMove);
   document.addEventListener('mouseup', onPointerUp);
-
-  // 터치
   area.addEventListener('touchstart', onPointerDown, { passive: false });
   document.addEventListener('touchmove', onPointerMove, { passive: false });
   document.addEventListener('touchend', onPointerUp);
 
-  // 내용 변경
   area.addEventListener('input', e => {
     const noteEl = e.target.closest('.note');
     if (!noteEl) return;
@@ -623,7 +955,6 @@ function setupEvents() {
     scheduleSave();
   });
 
-  // 팔레트 닫기
   document.addEventListener('click', e => {
     if (!e.target.closest('.palette-popup') && !e.target.closest('.note-palette-btn')) {
       document.getElementById('palettePopup').classList.remove('show');
@@ -680,16 +1011,14 @@ function reindex() {
   document.getElementById('notesArea').querySelectorAll('.note').forEach((el, i) => el.dataset.idx = i);
 }
 
-// PWA 설치
+// ===== PWA =====
 let deferredPrompt = null;
-
 function setupPWA() {
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     deferredPrompt = e;
     document.getElementById('installBanner').classList.add('show');
   });
-
   document.getElementById('installBtn').addEventListener('click', async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
@@ -697,12 +1026,9 @@ function setupPWA() {
     deferredPrompt = null;
     document.getElementById('installBanner').classList.remove('show');
   });
-
   document.getElementById('installDismiss').addEventListener('click', () => {
     document.getElementById('installBanner').classList.remove('show');
   });
-
-  // 서비스워커 등록
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
