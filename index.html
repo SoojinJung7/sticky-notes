@@ -480,6 +480,69 @@ body {
   padding: 0 4px;
 }
 
+/* 비밀 문구 모달 */
+.passphrase-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20001;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.passphrase-modal.hidden { display: none; }
+.passphrase-box {
+  background: #fff;
+  border-radius: 16px;
+  padding: 28px 24px;
+  max-width: 340px;
+  width: 100%;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+  text-align: center;
+}
+.passphrase-box h3 {
+  font-size: 18px;
+  color: #2D5E3F;
+  margin-bottom: 8px;
+}
+.passphrase-box p {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.passphrase-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  margin-bottom: 12px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.passphrase-input:focus { border-color: #5A9E6B; }
+.passphrase-error {
+  color: #e53e3e;
+  font-size: 12px;
+  margin-bottom: 8px;
+  display: none;
+}
+.passphrase-submit {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #2D5E3F, #5A9E6B);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.passphrase-submit:active { opacity: 0.9; }
+
 /* 로딩 스피너 */
 .loading-overlay {
   position: fixed;
@@ -556,6 +619,18 @@ body {
   <button class="install-dismiss" id="installDismiss">✕</button>
 </div>
 
+<!-- 비밀 문구 모달 -->
+<div class="passphrase-modal hidden" id="passphraseModal">
+  <div class="passphrase-box">
+    <h3 id="ppTitle">비밀 문구 설정</h3>
+    <p id="ppDesc">메모를 안전하게 암호화할 비밀 문구를 설정하세요. 다른 기기에서 로그인할 때 이 문구가 필요합니다.</p>
+    <input type="password" class="passphrase-input" id="ppInput" placeholder="비밀 문구 입력...">
+    <input type="password" class="passphrase-input" id="ppConfirm" placeholder="비밀 문구 확인...">
+    <div class="passphrase-error" id="ppError"></div>
+    <button class="passphrase-submit" id="ppSubmit">확인</button>
+  </div>
+</div>
+
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
@@ -602,22 +677,145 @@ let saveTimeout = null;
 let currentUser = null;
 let authMode = localStorage.getItem(MODE_KEY); // 'google' | 'local' | null
 
-// ===== 암호화 (Web Crypto API) =====
+// ===== 암호화 (Web Crypto API + 비밀 문구 기반 키 동기화) =====
 const CRYPTO_KEY_PREFIX = 'sticky-notes-key-';
 
+function toBase64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function fromBase64(b64) { return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+
+// 비밀 문구 → PBKDF2 → AES 래핑 키 생성
+async function deriveWrappingKey(passphrase, salt) {
+  const enc = new TextEncoder().encode(passphrase);
+  const baseKey = await crypto.subtle.importKey('raw', enc, 'PBKDF2', false, ['deriveKey']);
+  return await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+// 암호화 키를 비밀 문구로 래핑하여 Firestore에 저장
+async function wrapAndStoreKey(rawKeyB64, passphrase, uid) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const wrappingKey = await deriveWrappingKey(passphrase, salt);
+  const rawKeyBytes = fromBase64(rawKeyB64);
+  const wrapped = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrappingKey, rawKeyBytes);
+  const keyData = {
+    salt: toBase64(salt),
+    iv: toBase64(iv),
+    wrappedKey: toBase64(wrapped),
+  };
+  await setDoc(doc(db, 'userKeys', uid), keyData);
+}
+
+// Firestore에서 래핑된 키를 가져와 비밀 문구로 언래핑
+async function unwrapKey(passphrase, uid) {
+  const snap = await getDoc(doc(db, 'userKeys', uid));
+  if (!snap.exists()) return null;
+  const { salt, iv, wrappedKey } = snap.data();
+  const wrappingKey = await deriveWrappingKey(passphrase, fromBase64(salt));
+  try {
+    const rawKeyBytes = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: fromBase64(iv) },
+      wrappingKey,
+      fromBase64(wrappedKey)
+    );
+    return toBase64(rawKeyBytes);
+  } catch {
+    return null; // 비밀 문구 틀림
+  }
+}
+
+// 비밀 문구 모달 표시 (Promise로 결과 반환)
+function askPassphrase(isNew) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('passphraseModal');
+    const input = document.getElementById('ppInput');
+    const confirm = document.getElementById('ppConfirm');
+    const error = document.getElementById('ppError');
+    const submit = document.getElementById('ppSubmit');
+    const title = document.getElementById('ppTitle');
+    const desc = document.getElementById('ppDesc');
+
+    if (isNew) {
+      title.textContent = '비밀 문구 설정';
+      desc.textContent = '메모를 안전하게 암호화할 비밀 문구를 설정하세요. 다른 기기에서 로그인할 때 이 문구가 필요합니다.';
+      confirm.style.display = '';
+    } else {
+      title.textContent = '비밀 문구 입력';
+      desc.textContent = '메모를 복호화하려면 처음 설정한 비밀 문구를 입력하세요.';
+      confirm.style.display = 'none';
+    }
+
+    input.value = '';
+    confirm.value = '';
+    error.style.display = 'none';
+    modal.classList.remove('hidden');
+    input.focus();
+
+    const handler = () => {
+      const val = input.value.trim();
+      if (!val || val.length < 4) {
+        error.textContent = '4자 이상 입력해주세요.';
+        error.style.display = 'block';
+        return;
+      }
+      if (isNew && val !== confirm.value.trim()) {
+        error.textContent = '비밀 문구가 일치하지 않습니다.';
+        error.style.display = 'block';
+        return;
+      }
+      modal.classList.add('hidden');
+      submit.removeEventListener('click', handler);
+      resolve(val);
+    };
+    submit.onclick = handler;
+    // Enter 키 지원
+    input.onkeydown = (e) => { if (e.key === 'Enter') { if (isNew) confirm.focus(); else handler(); } };
+    confirm.onkeydown = (e) => { if (e.key === 'Enter') handler(); };
+  });
+}
+
+// 암호화 키 가져오기 (로컬 캐시 → Firestore → 새로 생성)
 async function getCryptoKey(uid) {
   const storageKey = CRYPTO_KEY_PREFIX + uid;
-  let rawKey = localStorage.getItem(storageKey);
+  let rawKeyB64 = localStorage.getItem(storageKey);
 
-  if (!rawKey) {
-    // 첫 로그인: 새 키 생성
-    const key = crypto.getRandomValues(new Uint8Array(32));
-    rawKey = btoa(String.fromCharCode(...key));
-    localStorage.setItem(storageKey, rawKey);
+  if (rawKeyB64) {
+    const keyBytes = fromBase64(rawKeyB64);
+    return await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
   }
 
-  const keyBytes = Uint8Array.from(atob(rawKey), c => c.charCodeAt(0));
-  return await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  // 로컬에 키가 없음 → Firestore에 래핑된 키가 있는지 확인
+  const keySnap = await getDoc(doc(db, 'userKeys', uid));
+
+  if (keySnap.exists()) {
+    // 기존 유저: 비밀 문구로 키 복원
+    while (true) {
+      const passphrase = await askPassphrase(false);
+      const unwrapped = await unwrapKey(passphrase, uid);
+      if (unwrapped) {
+        localStorage.setItem(storageKey, unwrapped);
+        const keyBytes = fromBase64(unwrapped);
+        return await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
+      }
+      // 틀렸으면 에러 표시 후 다시
+      const error = document.getElementById('ppError');
+      error.textContent = '비밀 문구가 틀렸습니다. 다시 입력해주세요.';
+      error.style.display = 'block';
+    }
+  } else {
+    // 신규 유저: 키 생성 + 비밀 문구 설정
+    const passphrase = await askPassphrase(true);
+    const rawKey = crypto.getRandomValues(new Uint8Array(32));
+    rawKeyB64 = toBase64(rawKey);
+    localStorage.setItem(storageKey, rawKeyB64);
+    await wrapAndStoreKey(rawKeyB64, passphrase, uid);
+    return await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  }
 }
 
 async function encryptData(plaintext, uid) {
@@ -625,16 +823,15 @@ async function encryptData(plaintext, uid) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(plaintext);
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-  // iv + ciphertext를 base64로 합침
   const combined = new Uint8Array(iv.length + ciphertext.byteLength);
   combined.set(iv);
   combined.set(new Uint8Array(ciphertext), iv.length);
-  return btoa(String.fromCharCode(...combined));
+  return toBase64(combined);
 }
 
 async function decryptData(base64, uid) {
   const key = await getCryptoKey(uid);
-  const combined = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+  const combined = fromBase64(base64);
   const iv = combined.slice(0, 12);
   const ciphertext = combined.slice(12);
   const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
