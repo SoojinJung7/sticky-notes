@@ -602,6 +602,45 @@ let saveTimeout = null;
 let currentUser = null;
 let authMode = localStorage.getItem(MODE_KEY); // 'google' | 'local' | null
 
+// ===== 암호화 (Web Crypto API) =====
+const CRYPTO_KEY_PREFIX = 'sticky-notes-key-';
+
+async function getCryptoKey(uid) {
+  const storageKey = CRYPTO_KEY_PREFIX + uid;
+  let rawKey = localStorage.getItem(storageKey);
+
+  if (!rawKey) {
+    // 첫 로그인: 새 키 생성
+    const key = crypto.getRandomValues(new Uint8Array(32));
+    rawKey = btoa(String.fromCharCode(...key));
+    localStorage.setItem(storageKey, rawKey);
+  }
+
+  const keyBytes = Uint8Array.from(atob(rawKey), c => c.charCodeAt(0));
+  return await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+
+async function encryptData(plaintext, uid) {
+  const key = await getCryptoKey(uid);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(plaintext);
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+  // iv + ciphertext를 base64로 합침
+  const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(ciphertext), iv.length);
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptData(base64, uid) {
+  const key = await getCryptoKey(uid);
+  const combined = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  return new TextDecoder().decode(decrypted);
+}
+
 // ===== 저장/불러오기 =====
 function loadNotesLocal() {
   try {
@@ -618,7 +657,14 @@ async function loadNotesCloud() {
   if (!currentUser) return [];
   try {
     const snap = await getDoc(doc(db, 'users', currentUser.uid));
-    return snap.exists() ? (snap.data().notes || []) : [];
+    if (!snap.exists()) return [];
+    const encrypted = snap.data().encrypted;
+    if (encrypted) {
+      const json = await decryptData(encrypted, currentUser.uid);
+      return JSON.parse(json);
+    }
+    // 암호화 전 기존 데이터 호환
+    return snap.data().notes || [];
   } catch (e) {
     console.error('Cloud load error:', e);
     return [];
@@ -628,7 +674,9 @@ async function loadNotesCloud() {
 async function saveNotesCloud(data) {
   if (!currentUser) return;
   try {
-    await setDoc(doc(db, 'users', currentUser.uid), { notes: data });
+    const json = JSON.stringify(data);
+    const encrypted = await encryptData(json, currentUser.uid);
+    await setDoc(doc(db, 'users', currentUser.uid), { encrypted });
   } catch (e) {
     console.error('Cloud save error:', e);
   }
