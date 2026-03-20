@@ -39,23 +39,26 @@ body {
 
 .toolbar-title {
   color: #fff;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   margin-right: 8px;
   letter-spacing: -0.5px;
   white-space: nowrap;
+  line-height: 30px;
 }
 
 .btn {
   background: rgba(255,255,255,0.2);
   border: none;
   color: #fff;
-  padding: 6px 12px;
+  padding: 0 12px;
+  height: 30px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
   transition: background 0.2s;
   white-space: nowrap;
+  line-height: 30px;
 }
 .btn:hover { background: rgba(255,255,255,0.35); }
 .btn:active { background: rgba(255,255,255,0.4); }
@@ -94,7 +97,8 @@ body {
   background: rgba(255,255,255,0.2);
   border: 1px solid rgba(255,255,255,0.3);
   color: #fff;
-  padding: 5px 10px;
+  padding: 0 10px;
+  height: 30px;
   border-radius: 6px;
   font-size: 13px;
   width: 140px;
@@ -250,17 +254,17 @@ body {
     padding-bottom: 0;
   }
 
-  .toolbar-title { font-size: 14px; margin-right: 4px; }
+  .toolbar-title { font-size: 13px; margin-right: 4px; }
 
-  .search-box { width: 100px; font-size: 12px; padding: 4px 8px; }
+  .search-box { width: 100px; font-size: 13px; height: 30px; padding: 0 8px; }
 
   /* 색상 선택기: 툴바 아래 별도 줄 + 스와이프 */
   .color-picker {
     order: 10;
     width: 100%;
-    margin: 6px 0 8px 0;
-    gap: 8px;
-    padding: 4px 8px;
+    margin: 4px 0 6px 0;
+    gap: 6px;
+    padding: 2px 8px;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
@@ -268,18 +272,18 @@ body {
   }
 
   .color-dot {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    border-width: 3px;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    border-width: 2px;
     scroll-snap-align: center;
   }
   .color-dot.active {
     transform: scale(1.15);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
   }
 
-  .notes-area { top: 92px; }
+  .notes-area { top: 74px; }
 
   .note {
     width: calc(100vw - 20px) !important;
