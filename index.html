@@ -590,6 +590,7 @@ body {
 <div class="toolbar">
   <span class="toolbar-title">Sticky Notes</span>
   <button class="btn" id="addBtn">+ 새 메모</button>
+  <button class="btn" id="refreshBtn" title="새로고침">↻</button>
   <div class="color-picker" id="colorPicker"></div>
   <div class="toolbar-right">
     <input type="text" class="search-box" id="searchBox" placeholder="검색...">
@@ -1126,6 +1127,10 @@ function setupEvents() {
   const area = document.getElementById('notesArea');
 
   document.getElementById('addBtn').addEventListener('click', addNote);
+  document.getElementById('refreshBtn').addEventListener('click', async () => {
+    notes = await loadNotes();
+    renderAll();
+  });
 
   const searchBox = document.getElementById('searchBox');
   const clearBtn = document.getElementById('clearSearchBtn');
