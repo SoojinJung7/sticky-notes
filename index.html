@@ -149,6 +149,7 @@ body {
 }
 .btn:hover { background: rgba(255,255,255,0.35); }
 .btn:active { background: rgba(255,255,255,0.4); }
+.btn:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
 
 .color-picker {
   display: flex;
@@ -590,6 +591,8 @@ body {
 <div class="toolbar">
   <span class="toolbar-title">Sticky Notes</span>
   <button class="btn" id="addBtn">+ 새 메모</button>
+  <button class="btn" id="undoBtn" title="실행 취소 (Ctrl+Z)" disabled>↩ Undo</button>
+  <button class="btn" id="redoBtn" title="다시 실행 (Ctrl+Y)" disabled>↪ Redo</button>
   <button class="btn" id="refreshBtn" title="새로고침">↻</button>
   <div class="color-picker" id="colorPicker"></div>
   <div class="toolbar-right">
@@ -679,6 +682,48 @@ let resizeState = null;
 let saveTimeout = null;
 let currentUser = null;
 let authMode = localStorage.getItem(MODE_KEY); // 'google' | 'local' | null
+
+// ===== Undo / Redo =====
+const MAX_HISTORY = 50;
+let undoStack = [];
+let redoStack = [];
+let inputSnapshotTimer = null;
+
+function snapshotNotes() {
+  return JSON.parse(JSON.stringify(notes));
+}
+
+function pushUndo() {
+  undoStack.push(snapshotNotes());
+  if (undoStack.length > MAX_HISTORY) undoStack.shift();
+  redoStack = [];
+  updateUndoRedoButtons();
+}
+
+function updateUndoRedoButtons() {
+  const u = document.getElementById('undoBtn');
+  const r = document.getElementById('redoBtn');
+  if (u) u.disabled = undoStack.length === 0;
+  if (r) r.disabled = redoStack.length === 0;
+}
+
+function doUndo() {
+  if (undoStack.length === 0) return;
+  redoStack.push(snapshotNotes());
+  notes = undoStack.pop();
+  renderAll();
+  scheduleSave();
+  updateUndoRedoButtons();
+}
+
+function doRedo() {
+  if (redoStack.length === 0) return;
+  undoStack.push(snapshotNotes());
+  notes = redoStack.pop();
+  renderAll();
+  scheduleSave();
+  updateUndoRedoButtons();
+}
 
 // ===== 암호화 (Web Crypto API + 비밀 문구 기반 키 동기화) =====
 const CRYPTO_KEY_PREFIX = 'sticky-notes-key-';
@@ -1127,7 +1172,10 @@ function setupEvents() {
   const area = document.getElementById('notesArea');
 
   document.getElementById('addBtn').addEventListener('click', addNote);
+  document.getElementById('undoBtn').addEventListener('click', doUndo);
+  document.getElementById('redoBtn').addEventListener('click', doRedo);
   document.getElementById('refreshBtn').addEventListener('click', async () => {
+    pushUndo();
     notes = await loadNotes();
     renderAll();
   });
@@ -1156,6 +1204,7 @@ function setupEvents() {
     const idx = +noteEl.dataset.idx;
 
     if (e.target.closest('.note-del-btn')) {
+      pushUndo();
       noteEl.remove();
       notes.splice(idx, 1);
       reindex();
@@ -1206,8 +1255,8 @@ function setupEvents() {
   }
 
   function onPointerUp() {
-    if (dragState) { dragState.el.classList.remove('dragging'); dragState = null; scheduleSave(); }
-    if (resizeState) { resizeState = null; scheduleSave(); }
+    if (dragState) { pushUndo(); dragState.el.classList.remove('dragging'); dragState = null; scheduleSave(); }
+    if (resizeState) { pushUndo(); resizeState = null; scheduleSave(); }
   }
 
   area.addEventListener('mousedown', onPointerDown);
@@ -1221,6 +1270,9 @@ function setupEvents() {
     const noteEl = e.target.closest('.note');
     if (!noteEl) return;
     const idx = +noteEl.dataset.idx;
+    // 텍스트 입력은 디바운스로 Undo 스냅샷 (타이핑 멈춘 후 1초)
+    clearTimeout(inputSnapshotTimer);
+    inputSnapshotTimer = setTimeout(() => pushUndo(), 1000);
     if (e.target.dataset.field === 'title') notes[idx].title = e.target.value;
     else if (e.target.dataset.field === 'body') notes[idx].body = e.target.innerText;
     scheduleSave();
@@ -1234,10 +1286,13 @@ function setupEvents() {
 
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.key === 'n') { e.preventDefault(); addNote(); }
+    if (e.ctrlKey && e.key === 'z' && !e.shiftKey) { e.preventDefault(); doUndo(); }
+    if (e.ctrlKey && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); doRedo(); }
   });
 }
 
 function addNote() {
+  pushUndo();
   const area = document.getElementById('notesArea');
   const x = 40 + (notes.length % 6) * 30;
   const y = 20 + (notes.length % 5) * 30;
@@ -1255,6 +1310,7 @@ function addNote() {
 }
 
 function duplicateNote(idx) {
+  pushUndo();
   const src = notes[idx];
   const note = { ...src, x: src.x + 20, y: src.y + 20, z: ++nextZ, created: new Date().toISOString() };
   notes.push(note);
@@ -1271,6 +1327,7 @@ function showPalette(noteEl, idx) {
   pp.onclick = e => {
     const dot = e.target.closest('.palette-dot');
     if (!dot) return;
+    pushUndo();
     notes[idx].color = dot.dataset.color;
     noteEl.style.background = dot.dataset.color;
     pp.classList.remove('show');
