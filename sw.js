@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sticky-notes-v3';
+const CACHE_NAME = 'sticky-notes-v4';
 const ASSETS = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {

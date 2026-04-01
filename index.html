@@ -415,7 +415,7 @@ body {
     box-shadow: 0 1px 4px rgba(0,0,0,0.3);
   }
 
-  .notes-area { top: 82px; }
+  .notes-area { top: 0; /* JS에서 동적으로 설정 */ }
 
   .note {
     width: calc(100vw - 32px) !important;
@@ -993,12 +993,23 @@ function hideUserUI() {
   document.getElementById('userMenu').classList.remove('show');
 }
 
+// ===== 툴바 높이 동적 반영 =====
+function adjustNotesAreaTop() {
+  const toolbar = document.querySelector('.toolbar');
+  const area = document.getElementById('notesArea');
+  if (toolbar && area) {
+    area.style.top = toolbar.offsetHeight + 'px';
+  }
+}
+
 // ===== 초기화 =====
 async function init() {
   buildColorPicker();
   buildPalettePopup();
   setupEvents();
   setupPWA();
+  requestAnimationFrame(adjustNotesAreaTop);
+  window.addEventListener('resize', adjustNotesAreaTop);
 
   // 온보딩 분기
   if (authMode === 'local') {
@@ -1206,11 +1217,12 @@ function setupEvents() {
     const idx = +noteEl.dataset.idx;
 
     if (e.target.closest('.note-del-btn')) {
+      e.stopPropagation();
+      const title = notes[idx].title || '제목 없음';
+      if (!confirm(`"${title}" 메모를 삭제하시겠습니까?`)) return;
       pushUndo();
-      noteEl.remove();
       notes.splice(idx, 1);
-      reindex();
-      updateEmpty();
+      renderAll();
       scheduleSave();
       return;
     }
