@@ -1146,11 +1146,12 @@ function createNoteEl(note, idx) {
   el.innerHTML = `
     <div class="note-header">
       <input class="note-title-input" value="${escHtml(note.title || '')}" placeholder="제목..." data-field="title">
+      <button class="note-btn note-strike-btn" title="취소선">S̶</button>
       <button class="note-btn note-palette-btn" title="색상 변경">🎨</button>
       <button class="note-btn note-dup-btn" title="복제">📋</button>
       <button class="note-btn note-del-btn" title="삭제">✕</button>
     </div>
-    <div class="note-body" contenteditable="true" data-field="body">${escHtml(note.body || '')}</div>
+    <div class="note-body" contenteditable="true" data-field="body">${note.body || ''}</div>
     <div class="note-footer">${ts}</div>
     <div class="note-resize"></div>
   `;
@@ -1213,6 +1214,7 @@ function setupEvents() {
       return;
     }
     if (e.target.closest('.note-dup-btn')) { duplicateNote(idx); return; }
+    if (e.target.closest('.note-strike-btn')) { toggleStrikethrough(noteEl, idx); return; }
     if (e.target.closest('.note-palette-btn')) { showPalette(noteEl, idx); return; }
 
     if (!isMobile) {
@@ -1238,10 +1240,12 @@ function setupEvents() {
   function onPointerMove(e) {
     if (dragState) {
       const pos = getPointerPos(e);
-      dragState.el.style.left = (pos.x - dragState.offX) + 'px';
-      dragState.el.style.top = (pos.y - dragState.offY) + 'px';
-      notes[dragState.idx].x = pos.x - dragState.offX;
-      notes[dragState.idx].y = pos.y - dragState.offY;
+      const newX = pos.x - dragState.offX;
+      const newY = Math.max(0, pos.y - dragState.offY);
+      dragState.el.style.left = newX + 'px';
+      dragState.el.style.top = newY + 'px';
+      notes[dragState.idx].x = newX;
+      notes[dragState.idx].y = newY;
     }
     if (resizeState) {
       const pos = getPointerPos(e);
@@ -1274,7 +1278,7 @@ function setupEvents() {
     clearTimeout(inputSnapshotTimer);
     inputSnapshotTimer = setTimeout(() => pushUndo(), 1000);
     if (e.target.dataset.field === 'title') notes[idx].title = e.target.value;
-    else if (e.target.dataset.field === 'body') notes[idx].body = e.target.innerText;
+    else if (e.target.dataset.field === 'body') notes[idx].body = e.target.innerHTML;
     scheduleSave();
   });
 
@@ -1315,6 +1319,16 @@ function duplicateNote(idx) {
   const note = { ...src, x: src.x + 20, y: src.y + 20, z: ++nextZ, created: new Date().toISOString() };
   notes.push(note);
   document.getElementById('notesArea').appendChild(createNoteEl(note, notes.length - 1));
+  scheduleSave();
+}
+
+function toggleStrikethrough(noteEl, idx) {
+  const body = noteEl.querySelector('.note-body');
+  const sel = window.getSelection();
+  if (!sel.rangeCount || sel.isCollapsed || !body.contains(sel.anchorNode)) return;
+  pushUndo();
+  document.execCommand('strikeThrough', false, null);
+  notes[idx].body = body.innerHTML;
   scheduleSave();
 }
 
