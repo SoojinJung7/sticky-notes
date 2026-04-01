@@ -1118,6 +1118,7 @@ function buildPalettePopup() {
 function renderAll() {
   const area = document.getElementById('notesArea');
   area.querySelectorAll('.note').forEach(n => n.remove());
+  notes.forEach(note => { if (note.y < 0) note.y = 0; });
   notes.forEach((note, i) => area.appendChild(createNoteEl(note, i)));
   updateEmpty();
 }
