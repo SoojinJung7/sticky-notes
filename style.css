@@ -308,6 +308,98 @@ body {
   text-align: right;
 }
 
+/* To-Do 모드 */
+.note-progress {
+  font-size: 11px;
+  color: rgba(0,0,0,0.6);
+  font-weight: 600;
+  margin: 0 4px;
+  white-space: nowrap;
+  letter-spacing: -0.2px;
+}
+
+.note-todo-btn.active {
+  color: rgba(0,0,0,0.85);
+  background: rgba(0,0,0,0.12);
+}
+
+.note-body-todo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px 8px;
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  min-height: 24px;
+}
+
+.todo-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #2D5E3F;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.todo-text {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgba(0,0,0,0.78);
+  padding: 2px 0;
+  font-family: inherit;
+  min-width: 0;
+}
+.todo-text::placeholder { color: rgba(0,0,0,0.3); }
+
+.todo-item.done .todo-text {
+  text-decoration: line-through;
+  color: rgba(0,0,0,0.4);
+}
+
+.todo-del {
+  background: none;
+  border: none;
+  color: rgba(0,0,0,0.3);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.todo-item:hover .todo-del { opacity: 1; }
+.todo-del:hover { color: rgba(0,0,0,0.75); background: rgba(0,0,0,0.1); }
+
+.todo-add {
+  background: none;
+  border: 1px dashed rgba(0,0,0,0.22);
+  color: rgba(0,0,0,0.5);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 6px;
+  align-self: flex-start;
+  font-family: inherit;
+}
+.todo-add:hover {
+  background: rgba(0,0,0,0.05);
+  color: rgba(0,0,0,0.8);
+  border-color: rgba(0,0,0,0.4);
+}
+
 /* 리사이즈 핸들 */
 .note-resize {
   position: absolute;
@@ -435,6 +527,10 @@ body {
   .note-resize { display: none; }
 
   .note-body { font-size: 15px; }
+
+  .todo-checkbox { width: 20px; height: 20px; }
+  .todo-text { font-size: 15px; }
+  .todo-del { opacity: 0.5; font-size: 13px; padding: 4px 6px; }
 
   .empty-state { position: relative; top: auto; left: auto; transform: none; margin-top: 25vh; }
 }

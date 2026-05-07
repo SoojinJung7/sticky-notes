@@ -517,7 +517,8 @@ function updateEmpty() {
 
 function createNoteEl(note, idx) {
   const el = document.createElement('div');
-  el.className = 'note';
+  const isTodo = note.mode === 'todo';
+  el.className = 'note' + (isTodo ? ' note-todo' : '');
   el.dataset.idx = idx;
   if (!isMobile) {
     el.style.left = note.x + 'px';
@@ -532,19 +533,62 @@ function createNoteEl(note, idx) {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
+  const items = note.items || [];
+  const total = items.length;
+  const done = items.filter(it => it.done).length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const progressHtml = isTodo
+    ? `<span class="note-progress">${done}/${total} · ${pct}%</span>`
+    : '';
+  const strikeBtn = isTodo
+    ? ''
+    : `<button class="note-btn note-strike-btn" title="취소선">S̶</button>`;
+  const todoBtnTitle = isTodo ? '일반 메모로' : '할 일 모드';
+
+  const bodyHtml = isTodo
+    ? renderTodoBody(items)
+    : `<div class="note-body" contenteditable="true" data-field="body">${note.body || ''}</div>`;
+
   el.innerHTML = `
     <div class="note-header">
       <input class="note-title-input" value="${escHtml(note.title || '')}" placeholder="제목..." data-field="title">
-      <button class="note-btn note-strike-btn" title="취소선">S̶</button>
+      ${progressHtml}
+      <button class="note-btn note-todo-btn${isTodo ? ' active' : ''}" title="${todoBtnTitle}">✓</button>
+      ${strikeBtn}
       <button class="note-btn note-palette-btn" title="색상 변경">🎨</button>
       <button class="note-btn note-dup-btn" title="복제">📋</button>
       <button class="note-btn note-del-btn" title="삭제">✕</button>
     </div>
-    <div class="note-body" contenteditable="true" data-field="body">${note.body || ''}</div>
+    ${bodyHtml}
     <div class="note-footer">${ts}</div>
     <div class="note-resize"></div>
   `;
   return el;
+}
+
+function renderTodoBody(items) {
+  const rows = items.map((it, i) => `
+    <div class="todo-item${it.done ? ' done' : ''}" data-todo-idx="${i}">
+      <input type="checkbox" class="todo-checkbox"${it.done ? ' checked' : ''}>
+      <input type="text" class="todo-text" value="${escHtml(it.text || '')}" placeholder="할 일...">
+      <button class="todo-del" title="항목 삭제">✕</button>
+    </div>
+  `).join('');
+  return `
+    <div class="note-body note-body-todo">
+      ${rows}
+      <button class="todo-add">+ 항목 추가</button>
+    </div>
+  `;
+}
+
+function stripHtmlToText(html) {
+  const d = document.createElement('div');
+  d.innerHTML = (html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(div|p)>/gi, '\n');
+  return d.textContent || '';
 }
 
 function escHtml(s) {
@@ -578,7 +622,9 @@ function setupEvents() {
     area.querySelectorAll('.note').forEach(el => {
       const idx = +el.dataset.idx;
       const note = notes[idx];
-      const match = !q || (note.title + ' ' + note.body).toLowerCase().includes(q);
+      const itemsText = (note.items || []).map(it => it.text).join(' ');
+      const haystack = (note.title + ' ' + (note.body || '') + ' ' + itemsText).toLowerCase();
+      const match = !q || haystack.includes(q);
       el.classList.toggle('hidden-note', !match);
     });
   });
@@ -606,6 +652,19 @@ function setupEvents() {
     if (e.target.closest('.note-dup-btn')) { duplicateNote(idx); return; }
     if (e.target.closest('.note-strike-btn')) { toggleStrikethrough(noteEl, idx); return; }
     if (e.target.closest('.note-palette-btn')) { showPalette(noteEl, idx); return; }
+    if (e.target.closest('.note-todo-btn')) { e.stopPropagation(); toggleTodoMode(noteEl, idx); return; }
+    if (e.target.closest('.todo-add')) { e.stopPropagation(); addTodoItem(noteEl, idx); return; }
+    const todoDelEl = e.target.closest('.todo-del');
+    if (todoDelEl) {
+      e.stopPropagation();
+      const itemIdx = +todoDelEl.closest('.todo-item').dataset.todoIdx;
+      removeTodoItem(noteEl, idx, itemIdx);
+      return;
+    }
+    if (e.target.closest('.todo-checkbox') || e.target.closest('.todo-text')) {
+      // 체크박스/입력은 기본 동작 유지, 드래그 방지
+      return;
+    }
 
     if (!isMobile) {
       const pos = getPointerPos(e);
@@ -671,7 +730,46 @@ function setupEvents() {
     inputSnapshotTimer = setTimeout(() => pushUndo(), 1000);
     if (e.target.dataset.field === 'title') notes[idx].title = e.target.value;
     else if (e.target.dataset.field === 'body') notes[idx].body = e.target.innerHTML;
+    else if (e.target.classList.contains('todo-text')) {
+      const itemEl = e.target.closest('.todo-item');
+      if (itemEl && notes[idx].items) {
+        const itemIdx = +itemEl.dataset.todoIdx;
+        notes[idx].items[itemIdx].text = e.target.value;
+      }
+    }
     scheduleSave();
+  });
+
+  area.addEventListener('change', e => {
+    if (!e.target.classList.contains('todo-checkbox')) return;
+    const noteEl = e.target.closest('.note');
+    if (!noteEl) return;
+    const idx = +noteEl.dataset.idx;
+    const itemEl = e.target.closest('.todo-item');
+    if (!itemEl || !notes[idx].items) return;
+    const itemIdx = +itemEl.dataset.todoIdx;
+    pushUndo();
+    notes[idx].items[itemIdx].done = e.target.checked;
+    itemEl.classList.toggle('done', e.target.checked);
+    updateTodoProgress(noteEl, notes[idx]);
+    scheduleSave();
+  });
+
+  area.addEventListener('keydown', e => {
+    if (!e.target.classList.contains('todo-text')) return;
+    const noteEl = e.target.closest('.note');
+    if (!noteEl) return;
+    const idx = +noteEl.dataset.idx;
+    const itemEl = e.target.closest('.todo-item');
+    if (!itemEl) return;
+    const itemIdx = +itemEl.dataset.todoIdx;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addTodoItem(noteEl, idx, itemIdx);
+    } else if (e.key === 'Backspace' && e.target.value === '' && (notes[idx].items || []).length > 1) {
+      e.preventDefault();
+      removeTodoItem(noteEl, idx, itemIdx, Math.max(0, itemIdx - 1));
+    }
   });
 
   document.addEventListener('click', e => {
@@ -714,6 +812,74 @@ function duplicateNote(idx) {
   document.getElementById('notesArea').appendChild(createNoteEl(note, notes.length - 1));
   updateSpacer();
   scheduleSave();
+}
+
+function toggleTodoMode(noteEl, idx) {
+  pushUndo();
+  const note = notes[idx];
+  if (note.mode === 'todo') {
+    const lines = (note.items || [])
+      .filter(it => (it.text || '').trim())
+      .map(it => it.done ? `<s>${escHtml(it.text)}</s>` : escHtml(it.text));
+    note.body = lines.join('<br>');
+    note.mode = 'note';
+    delete note.items;
+  } else {
+    const text = stripHtmlToText(note.body);
+    const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+    note.items = lines.length > 0
+      ? lines.map(t => ({ text: t, done: false }))
+      : [{ text: '', done: false }];
+    note.mode = 'todo';
+    note.body = '';
+  }
+  const newEl = createNoteEl(note, idx);
+  noteEl.replaceWith(newEl);
+  if (note.mode === 'todo') {
+    const first = newEl.querySelector('.todo-text');
+    if (first) first.focus();
+  }
+  scheduleSave();
+}
+
+function addTodoItem(noteEl, idx, afterIdx = -1) {
+  pushUndo();
+  const note = notes[idx];
+  if (!note.items) note.items = [];
+  const newItem = { text: '', done: false };
+  const insertAt = afterIdx >= 0 ? afterIdx + 1 : note.items.length;
+  note.items.splice(insertAt, 0, newItem);
+  const newEl = createNoteEl(note, idx);
+  noteEl.replaceWith(newEl);
+  const inputs = newEl.querySelectorAll('.todo-text');
+  if (inputs[insertAt]) inputs[insertAt].focus();
+  scheduleSave();
+}
+
+function removeTodoItem(noteEl, idx, itemIdx, focusItemIdx = null) {
+  pushUndo();
+  const note = notes[idx];
+  if (!note.items) return;
+  note.items.splice(itemIdx, 1);
+  const newEl = createNoteEl(note, idx);
+  noteEl.replaceWith(newEl);
+  if (focusItemIdx !== null) {
+    const inputs = newEl.querySelectorAll('.todo-text');
+    const target = inputs[Math.min(focusItemIdx, inputs.length - 1)];
+    if (target) {
+      target.focus();
+      target.setSelectionRange(target.value.length, target.value.length);
+    }
+  }
+  scheduleSave();
+}
+
+function updateTodoProgress(noteEl, note) {
+  const total = (note.items || []).length;
+  const done = (note.items || []).filter(it => it.done).length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const prog = noteEl.querySelector('.note-progress');
+  if (prog) prog.textContent = `${done}/${total} · ${pct}%`;
 }
 
 function toggleStrikethrough(noteEl, idx) {
