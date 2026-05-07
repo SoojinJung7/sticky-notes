@@ -932,7 +932,25 @@ function setupPWA() {
     document.getElementById('installBanner').classList.remove('show');
   });
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // 한 시간마다 새 버전 체크
+      setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+      // 페이지 보일 때마다 한 번 체크 (PWA 재진입 시)
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    }).catch(() => {});
+
+    // 새 SW가 활성화되면 자동 새로고침 (첫 설치는 제외)
+    let hadController = !!navigator.serviceWorker.controller;
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) { hadController = true; return; }
+      if (refreshing) return;
+      refreshing = true;
+      // 진행 중인 저장이 끝날 시간을 살짝 줌
+      setTimeout(() => window.location.reload(), 400);
+    });
   }
 }
 
