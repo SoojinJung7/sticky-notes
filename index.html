@@ -38,6 +38,7 @@
   <button class="btn" id="undoBtn" title="실행 취소 (Ctrl+Z)" disabled>↩ Undo</button>
   <button class="btn" id="redoBtn" title="다시 실행 (Ctrl+Y)" disabled>↪ Redo</button>
   <button class="btn" id="refreshBtn" title="새로고침">↻</button>
+  <button class="btn" id="arrangeBtn" title="색상별로 정리">🧹 정리</button>
   <button class="btn" id="panelToggleBtn" title="목록 패널">☰</button>
   <div class="color-picker" id="colorPicker"></div>
   <div class="toolbar-right">
@@ -74,6 +75,8 @@
 </div>
 
 <div class="palette-popup" id="palettePopup"></div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <div class="install-banner" id="installBanner">
   <span>홈 화면에 추가하시겠어요?</span>

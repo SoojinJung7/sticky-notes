@@ -824,6 +824,10 @@ function setupEvents() {
     document.getElementById('panelExpandAllBtn').addEventListener('click', () => setAllMinimized(false));
   }
 
+  // 정리 버튼
+  const arrangeBtn = document.getElementById('arrangeBtn');
+  if (arrangeBtn) arrangeBtn.addEventListener('click', arrangeNotes);
+
   document.addEventListener('click', e => {
     if (!e.target.closest('.palette-popup') && !e.target.closest('.note-palette-btn')) {
       document.getElementById('palettePopup').classList.remove('show');
@@ -981,6 +985,83 @@ function setAllMinimized(val) {
   notes.forEach(n => { n.minimized = val; });
   renderAll();
   scheduleSave();
+}
+
+// ===== 정리: 색상별로 좌측 정렬 =====
+function arrangeNotes() {
+  if (notes.length === 0) return;
+  pushUndo();
+
+  // 색상 순서 인덱스 (COLORS 배열 순서를 기준; 미포함 색상은 마지막)
+  const colorOrder = new Map(COLORS.map((c, i) => [c.hex, i]));
+  const ordered = [...notes].sort((a, b) => {
+    const ca = colorOrder.has(a.color) ? colorOrder.get(a.color) : 999;
+    const cb = colorOrder.has(b.color) ? colorOrder.get(b.color) : 999;
+    if (ca !== cb) return ca - cb;
+    // 같은 색상 안에선 생성일 오름차순
+    return new Date(a.created) - new Date(b.created);
+  });
+
+  if (isMobile) {
+    // 모바일은 flex column 레이아웃 → 배열 순서만 바꾸면 됨
+    notes = ordered;
+    renderAll();
+    scheduleSave();
+    showToast('정리 완료 — Ctrl+Z로 원복');
+    return;
+  }
+
+  // 데스크톱: 절대 좌표 계산
+  const PAD_L = 40, PAD_T = 60;
+  const GAP_X = 12, GAP_ROW = 12, GAP_GROUP = 24;
+  const area = document.getElementById('notesArea');
+  const availW = area.clientWidth - PAD_L * 2;
+
+  let cursorX = PAD_L;
+  let cursorY = PAD_T;
+  let rowMaxH = 0;
+  let prevColor = null;
+
+  ordered.forEach(note => {
+    const w = note.w || 240;
+    const h = note.minimized ? 36 : (note.h || 180);
+
+    if (prevColor !== null && note.color !== prevColor) {
+      cursorX = PAD_L;
+      cursorY += rowMaxH + GAP_GROUP;
+      rowMaxH = 0;
+    }
+    if (cursorX > PAD_L && cursorX + w > availW + PAD_L) {
+      cursorX = PAD_L;
+      cursorY += rowMaxH + GAP_ROW;
+      rowMaxH = 0;
+    }
+
+    note.x = cursorX;
+    note.y = cursorY;
+    cursorX += w + GAP_X;
+    if (h > rowMaxH) rowMaxH = h;
+    prevColor = note.color;
+  });
+
+  notes = ordered;
+  // z-index 재설정 (정렬 직후엔 좌→우→아래 순서가 자연)
+  notes.forEach((n, i) => { n.z = 100 + i; });
+  nextZ = 100 + notes.length;
+
+  renderAll();
+  scheduleSave();
+  showToast('정리 완료 — Ctrl+Z로 원복');
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
 }
 
 // ===== 사이드 패널 =====
