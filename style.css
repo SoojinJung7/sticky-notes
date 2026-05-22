@@ -587,6 +587,25 @@ body {
   .notes-area { transition: right 0.25s ease; }
 }
 
+/* 사이드 패널 백드롭 (모바일에서만 활성) */
+.side-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 9995;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  display: none;
+}
+@media (max-width: 600px) {
+  .side-panel-backdrop { display: block; }
+  body.panel-open .side-panel-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 /* 모바일 반응형 */
 @media (max-width: 600px) {
   .toolbar {
@@ -661,6 +680,24 @@ body {
     width: 86vw;
     max-width: 360px;
     z-index: 10000;
+  }
+
+  /* 모바일 최소화 헤더: 부가 버튼 숨겨서 리스트 느낌 */
+  .note.minimized .note-strike-btn,
+  .note.minimized .note-palette-btn,
+  .note.minimized .note-dup-btn,
+  .note.minimized .note-todo-btn,
+  .note.minimized .note-progress {
+    display: none;
+  }
+  .note.minimized .note-header {
+    cursor: pointer;
+    padding: 10px 8px;
+  }
+  /* 최소화된 노트는 제목 클릭으로 펼치도록, 입력은 비활성 */
+  .note.minimized .note-title-input {
+    pointer-events: none;
+    font-size: 14px;
   }
 }
 

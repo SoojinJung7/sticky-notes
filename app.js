@@ -378,6 +378,16 @@ function updateSpacer() {
   spacer.style.height = maxBottom + 'px';
 }
 
+// 모바일: 펼쳐진 노트가 여러 개면 가장 최근 것만 남기고 정리 (아코디언)
+function enforceMobileAccordion() {
+  if (!isMobile) return;
+  const expanded = notes.filter(n => !n.minimized);
+  if (expanded.length <= 1) return;
+  let keep = expanded[0];
+  expanded.forEach(n => { if ((n.z || 0) > (keep.z || 0)) keep = n; });
+  notes.forEach(n => { if (n !== keep) n.minimized = true; });
+}
+
 // ===== 초기화 =====
 async function init() {
   buildColorPicker();
@@ -391,6 +401,7 @@ async function init() {
   if (authMode === 'local') {
     hideOnboarding();
     notes = loadNotesLocal();
+    enforceMobileAccordion();
     renderAll();
   } else if (authMode === 'google') {
     hideOnboarding();
@@ -402,6 +413,7 @@ async function init() {
         currentUser = user;
         showUserUI(user);
         notes = await loadNotesCloud();
+        enforceMobileAccordion();
         renderAll();
       } else {
         // 토큰 만료 등 → 온보딩으로
@@ -436,6 +448,7 @@ document.getElementById('obGoogle').addEventListener('click', async () => {
     } else {
       notes = cloudNotes;
     }
+    enforceMobileAccordion();
     renderAll();
   } catch (e) {
     console.error('Login error:', e);
@@ -449,6 +462,7 @@ document.getElementById('obLocal').addEventListener('click', () => {
   localStorage.setItem(MODE_KEY, 'local');
   hideOnboarding();
   notes = loadNotesLocal();
+  enforceMobileAccordion();
   renderAll();
 });
 
@@ -700,6 +714,13 @@ function setupEvents() {
       return;
     }
 
+    // 모바일: 최소화된 노트는 헤더 어디든 탭하면 펼침 (버튼은 위에서 이미 처리)
+    if (isMobile && notes[idx].minimized) {
+      e.preventDefault();
+      toggleMinimize(idx);
+      return;
+    }
+
     if (!isMobile) {
       const pos = getPointerPos(e);
       if (e.target.closest('.note-resize')) {
@@ -822,6 +843,11 @@ function setupEvents() {
     });
     document.getElementById('panelMinAllBtn').addEventListener('click', () => setAllMinimized(true));
     document.getElementById('panelExpandAllBtn').addEventListener('click', () => setAllMinimized(false));
+    const backdrop = document.getElementById('sidePanelBackdrop');
+    if (backdrop) backdrop.addEventListener('click', () => {
+      panel.classList.remove('open');
+      document.body.classList.remove('panel-open');
+    });
   }
 
   // 정리 버튼
@@ -851,13 +877,27 @@ function addNote() {
     x, y, w: 240, h: 180, z: ++nextZ,
     created: new Date().toISOString(),
   };
-  notes.push(note);
-  const el = createNoteEl(note, notes.length - 1);
-  area.appendChild(el);
-  el.querySelector('.note-body').focus();
-  updateEmpty();
-  updateSpacer();
-  renderPanel();
+
+  if (isMobile) {
+    // 아코디언: 기존 노트들 모두 접고 새 노트만 펼침
+    notes.forEach(n => { n.minimized = true; });
+    notes.push(note);
+    renderAll();
+    const newEl = area.querySelector(`.note[data-idx="${notes.length - 1}"]`);
+    if (newEl) {
+      const body = newEl.querySelector('.note-body');
+      if (body) body.focus();
+      newEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  } else {
+    notes.push(note);
+    const el = createNoteEl(note, notes.length - 1);
+    area.appendChild(el);
+    el.querySelector('.note-body').focus();
+    updateEmpty();
+    updateSpacer();
+    renderPanel();
+  }
   scheduleSave();
 }
 
@@ -974,7 +1014,17 @@ function reindex() {
 // ===== 최소화 =====
 function toggleMinimize(idx) {
   pushUndo();
-  notes[idx].minimized = !notes[idx].minimized;
+  if (isMobile) {
+    // 아코디언: 클릭한 노트만 펼침
+    const willExpand = notes[idx].minimized;
+    if (willExpand) {
+      notes.forEach((n, i) => { n.minimized = i !== idx; });
+    } else {
+      notes[idx].minimized = true;
+    }
+  } else {
+    notes[idx].minimized = !notes[idx].minimized;
+  }
   renderAll();
   scheduleSave();
 }
@@ -1091,12 +1141,25 @@ function focusNote(idx) {
   const area = document.getElementById('notesArea');
   if (!area.querySelector(`.note[data-idx="${idx}"]`)) return;
 
-  // 패널 클릭 = minimize 토글 (펼친 상태면 접고, 접힌 상태면 펴기)
   pushUndo();
-  notes[idx].minimized = !notes[idx].minimized;
-  if (!notes[idx].minimized) {
-    notes[idx].z = ++nextZ;
+
+  if (isMobile) {
+    // 모바일 아코디언: 클릭한 노트만 펼침, 나머지는 모두 접음
+    const willExpand = notes[idx].minimized;
+    if (willExpand) {
+      notes.forEach((n, i) => { n.minimized = i !== idx; });
+    } else {
+      // 이미 펼쳐진 상태에서 다시 누르면 전부 접기 (헤더 리스트 뷰)
+      notes[idx].minimized = true;
+    }
+  } else {
+    // 데스크톱: 단순 토글
+    notes[idx].minimized = !notes[idx].minimized;
+    if (!notes[idx].minimized) {
+      notes[idx].z = ++nextZ;
+    }
   }
+
   renderAll();
   scheduleSave();
 
