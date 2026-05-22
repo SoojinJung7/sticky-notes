@@ -987,23 +987,21 @@ function setAllMinimized(val) {
   scheduleSave();
 }
 
-// ===== 정리: 색상별로 좌측 정렬 =====
+// ===== 정리: 색상 순 + 가나다/알파벳 순, 좌측 세로 컬럼 =====
 function arrangeNotes() {
   if (notes.length === 0) return;
   pushUndo();
 
-  // 색상 순서 인덱스 (COLORS 배열 순서를 기준; 미포함 색상은 마지막)
   const colorOrder = new Map(COLORS.map((c, i) => [c.hex, i]));
   const ordered = [...notes].sort((a, b) => {
     const ca = colorOrder.has(a.color) ? colorOrder.get(a.color) : 999;
     const cb = colorOrder.has(b.color) ? colorOrder.get(b.color) : 999;
     if (ca !== cb) return ca - cb;
-    // 같은 색상 안에선 생성일 오름차순
-    return new Date(a.created) - new Date(b.created);
+    // 같은 색상 안에선 표시 제목 기준 가나다/알파벳 순
+    return getDisplayTitle(a).localeCompare(getDisplayTitle(b), 'ko');
   });
 
   if (isMobile) {
-    // 모바일은 flex column 레이아웃 → 배열 순서만 바꾸면 됨
     notes = ordered;
     renderAll();
     scheduleSave();
@@ -1011,41 +1009,41 @@ function arrangeNotes() {
     return;
   }
 
-  // 데스크톱: 절대 좌표 계산
-  const PAD_L = 40, PAD_T = 60;
-  const GAP_X = 12, GAP_ROW = 12, GAP_GROUP = 24;
+  // 데스크톱: 좌측에서 시작해 세로 컬럼으로 쌓고, 화면 높이 초과 시 다음 컬럼
+  const PAD_L = 20, PAD_T = 20;
+  const GAP_Y = 12, GAP_GROUP = 24, COL_GAP = 16;
   const area = document.getElementById('notesArea');
-  const availW = area.clientWidth - PAD_L * 2;
+  const maxY = area.clientHeight - 20;
 
   let cursorX = PAD_L;
   let cursorY = PAD_T;
-  let rowMaxH = 0;
+  let colMaxW = 0;
   let prevColor = null;
 
   ordered.forEach(note => {
     const w = note.w || 240;
     const h = note.minimized ? 36 : (note.h || 180);
 
-    if (prevColor !== null && note.color !== prevColor) {
-      cursorX = PAD_L;
-      cursorY += rowMaxH + GAP_GROUP;
-      rowMaxH = 0;
+    // 색상 그룹 사이엔 살짝 더 큰 여백 (이미 컬럼 위가 아닐 때만)
+    if (prevColor !== null && note.color !== prevColor && cursorY > PAD_T) {
+      cursorY += GAP_GROUP - GAP_Y;
     }
-    if (cursorX > PAD_L && cursorX + w > availW + PAD_L) {
-      cursorX = PAD_L;
-      cursorY += rowMaxH + GAP_ROW;
-      rowMaxH = 0;
+
+    // 컬럼이 넘치면 다음 컬럼으로
+    if (cursorY > PAD_T && cursorY + h > maxY) {
+      cursorX += colMaxW + COL_GAP;
+      cursorY = PAD_T;
+      colMaxW = 0;
     }
 
     note.x = cursorX;
     note.y = cursorY;
-    cursorX += w + GAP_X;
-    if (h > rowMaxH) rowMaxH = h;
+    cursorY += h + GAP_Y;
+    if (w > colMaxW) colMaxW = w;
     prevColor = note.color;
   });
 
   notes = ordered;
-  // z-index 재설정 (정렬 직후엔 좌→우→아래 순서가 자연)
   notes.forEach((n, i) => { n.z = 100 + i; });
   nextZ = 100 + notes.length;
 
@@ -1091,18 +1089,21 @@ function renderPanel() {
 
 function focusNote(idx) {
   const area = document.getElementById('notesArea');
+  if (!area.querySelector(`.note[data-idx="${idx}"]`)) return;
+
+  // 패널 클릭 = minimize 토글 (펼친 상태면 접고, 접힌 상태면 펴기)
+  pushUndo();
+  notes[idx].minimized = !notes[idx].minimized;
+  if (!notes[idx].minimized) {
+    notes[idx].z = ++nextZ;
+  }
+  renderAll();
+  scheduleSave();
+
+  // 재렌더 후 다시 엘리먼트 잡기
   const el = area.querySelector(`.note[data-idx="${idx}"]`);
   if (!el) return;
-  // 최소화돼 있으면 자동으로 펼침
-  if (notes[idx].minimized) {
-    notes[idx].minimized = false;
-    renderAll();
-    scheduleSave();
-    return focusNote(idx);
-  }
-  // 최상단으로 올림
-  notes[idx].z = ++nextZ;
-  el.style.zIndex = nextZ;
+
   // 스크롤 & 하이라이트
   if (isMobile) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1112,11 +1113,10 @@ function focusNote(idx) {
     area.scrollTo({ left: Math.max(0, target), top: Math.max(0, targetY), behavior: 'smooth' });
   }
   el.classList.remove('flash');
-  // 강제 reflow 후 다시 적용해야 애니메이션 재실행됨
   void el.offsetWidth;
   el.classList.add('flash');
   setTimeout(() => el.classList.remove('flash'), 1200);
-  // 모바일에선 항목 클릭 후 패널 닫기
+
   if (isMobile) {
     const panel = document.getElementById('sidePanel');
     panel.classList.remove('open');
