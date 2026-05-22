@@ -509,6 +509,7 @@ function renderAll() {
   notes.forEach((note, i) => area.appendChild(createNoteEl(note, i)));
   updateEmpty();
   updateSpacer();
+  renderPanel();
 }
 
 function updateEmpty() {
@@ -518,13 +519,13 @@ function updateEmpty() {
 function createNoteEl(note, idx) {
   const el = document.createElement('div');
   const isTodo = note.mode === 'todo';
-  el.className = 'note' + (isTodo ? ' note-todo' : '');
+  el.className = 'note' + (isTodo ? ' note-todo' : '') + (note.minimized ? ' minimized' : '');
   el.dataset.idx = idx;
   if (!isMobile) {
     el.style.left = note.x + 'px';
     el.style.top = note.y + 'px';
     el.style.width = (note.w || 240) + 'px';
-    el.style.minHeight = (note.h || 180) + 'px';
+    if (!note.minimized) el.style.minHeight = (note.h || 180) + 'px';
   }
   el.style.background = note.color;
   el.style.zIndex = note.z || nextZ++;
@@ -550,6 +551,9 @@ function createNoteEl(note, idx) {
     ? renderTodoBody(items)
     : `<div class="note-body" contenteditable="true" data-field="body">${note.body || ''}</div>`;
 
+  const minBtnLabel = note.minimized ? '▢' : '–';
+  const minBtnTitle = note.minimized ? '펼치기' : '최소화';
+
   el.innerHTML = `
     <div class="note-header">
       <input class="note-title-input" value="${escHtml(note.title || '')}" placeholder="제목..." data-field="title">
@@ -558,6 +562,7 @@ function createNoteEl(note, idx) {
       ${strikeBtn}
       <button class="note-btn note-palette-btn" title="색상 변경">🎨</button>
       <button class="note-btn note-dup-btn" title="복제">📋</button>
+      <button class="note-btn note-min-btn" title="${minBtnTitle}">${minBtnLabel}</button>
       <button class="note-btn note-del-btn" title="삭제">✕</button>
     </div>
     ${bodyHtml}
@@ -591,6 +596,25 @@ function stripHtmlToText(html) {
   return d.textContent || '';
 }
 
+// 패널/툴팁용 표시 제목: title → To-Do 첫 항목 → body 첫 줄 → '제목 없음'
+function getDisplayTitle(note) {
+  if (note.title && note.title.trim()) return note.title.trim();
+  if (note.mode === 'todo' && Array.isArray(note.items)) {
+    const first = note.items.find(it => (it.text || '').trim());
+    if (first) {
+      const t = first.text.trim();
+      return t.length > 30 ? t.slice(0, 30) + '…' : t;
+    }
+  }
+  if (note.body) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = note.body;
+    const text = (tmp.textContent || '').trim();
+    if (text) return text.length > 30 ? text.slice(0, 30) + '…' : text;
+  }
+  return '제목 없음';
+}
+
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -616,9 +640,7 @@ function setupEvents() {
 
   const searchBox = document.getElementById('searchBox');
   const clearBtn = document.getElementById('clearSearchBtn');
-  searchBox.addEventListener('input', () => {
-    const q = searchBox.value.toLowerCase();
-    clearBtn.style.display = q ? 'inline-block' : 'none';
+  function applySearch(q) {
     area.querySelectorAll('.note').forEach(el => {
       const idx = +el.dataset.idx;
       const note = notes[idx];
@@ -627,11 +649,22 @@ function setupEvents() {
       const match = !q || haystack.includes(q);
       el.classList.toggle('hidden-note', !match);
     });
+    document.querySelectorAll('#panelList .panel-item').forEach(el => {
+      const idx = +el.dataset.idx;
+      const note = notes[idx];
+      const match = !q || (note.title + ' ' + note.body).toLowerCase().includes(q);
+      el.classList.toggle('hidden-note', !match);
+    });
+  }
+  searchBox.addEventListener('input', () => {
+    const q = searchBox.value.toLowerCase();
+    clearBtn.style.display = q ? 'inline-block' : 'none';
+    applySearch(q);
   });
   clearBtn.addEventListener('click', () => {
     searchBox.value = '';
     clearBtn.style.display = 'none';
-    area.querySelectorAll('.note').forEach(el => el.classList.remove('hidden-note'));
+    applySearch('');
   });
 
   function onPointerDown(e) {
@@ -652,6 +685,7 @@ function setupEvents() {
     if (e.target.closest('.note-dup-btn')) { duplicateNote(idx); return; }
     if (e.target.closest('.note-strike-btn')) { toggleStrikethrough(noteEl, idx); return; }
     if (e.target.closest('.note-palette-btn')) { showPalette(noteEl, idx); return; }
+    if (e.target.closest('.note-min-btn')) { e.stopPropagation(); toggleMinimize(idx); return; }
     if (e.target.closest('.note-todo-btn')) { e.stopPropagation(); toggleTodoMode(noteEl, idx); return; }
     if (e.target.closest('.todo-add')) { e.stopPropagation(); addTodoItem(noteEl, idx); return; }
     const todoDelEl = e.target.closest('.todo-del');
@@ -738,6 +772,7 @@ function setupEvents() {
       }
     }
     scheduleSave();
+    renderPanel();
   });
 
   area.addEventListener('change', e => {
@@ -772,6 +807,23 @@ function setupEvents() {
     }
   });
 
+  // 사이드 패널 토글
+  const panelToggle = document.getElementById('panelToggleBtn');
+  const panel = document.getElementById('sidePanel');
+  if (panelToggle && panel) {
+    panelToggle.addEventListener('click', () => {
+      panel.classList.toggle('open');
+      document.body.classList.toggle('panel-open', panel.classList.contains('open'));
+      if (panel.classList.contains('open')) renderPanel();
+    });
+    document.getElementById('panelCloseBtn').addEventListener('click', () => {
+      panel.classList.remove('open');
+      document.body.classList.remove('panel-open');
+    });
+    document.getElementById('panelMinAllBtn').addEventListener('click', () => setAllMinimized(true));
+    document.getElementById('panelExpandAllBtn').addEventListener('click', () => setAllMinimized(false));
+  }
+
   document.addEventListener('click', e => {
     if (!e.target.closest('.palette-popup') && !e.target.closest('.note-palette-btn')) {
       document.getElementById('palettePopup').classList.remove('show');
@@ -801,6 +853,7 @@ function addNote() {
   el.querySelector('.note-body').focus();
   updateEmpty();
   updateSpacer();
+  renderPanel();
   scheduleSave();
 }
 
@@ -811,6 +864,7 @@ function duplicateNote(idx) {
   notes.push(note);
   document.getElementById('notesArea').appendChild(createNoteEl(note, notes.length - 1));
   updateSpacer();
+  renderPanel();
   scheduleSave();
 }
 
@@ -911,6 +965,82 @@ function showPalette(noteEl, idx) {
 
 function reindex() {
   document.getElementById('notesArea').querySelectorAll('.note').forEach((el, i) => el.dataset.idx = i);
+}
+
+// ===== 최소화 =====
+function toggleMinimize(idx) {
+  pushUndo();
+  notes[idx].minimized = !notes[idx].minimized;
+  renderAll();
+  scheduleSave();
+}
+
+function setAllMinimized(val) {
+  if (notes.length === 0) return;
+  pushUndo();
+  notes.forEach(n => { n.minimized = val; });
+  renderAll();
+  scheduleSave();
+}
+
+// ===== 사이드 패널 =====
+function renderPanel() {
+  const list = document.getElementById('panelList');
+  const empty = document.getElementById('panelEmpty');
+  if (!list) return;
+  list.innerHTML = '';
+  if (notes.length === 0) {
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  notes.forEach((note, i) => {
+    const item = document.createElement('div');
+    item.className = 'panel-item' + (note.minimized ? ' is-minimized' : '');
+    item.dataset.idx = i;
+    item.innerHTML = `
+      <span class="panel-item-dot" style="background:${note.color}"></span>
+      <span class="panel-item-title">${escHtml(getDisplayTitle(note))}</span>
+      ${note.minimized ? '<span class="panel-item-badge" title="최소화됨">▢</span>' : ''}
+    `;
+    item.addEventListener('click', () => focusNote(i));
+    list.appendChild(item);
+  });
+}
+
+function focusNote(idx) {
+  const area = document.getElementById('notesArea');
+  const el = area.querySelector(`.note[data-idx="${idx}"]`);
+  if (!el) return;
+  // 최소화돼 있으면 자동으로 펼침
+  if (notes[idx].minimized) {
+    notes[idx].minimized = false;
+    renderAll();
+    scheduleSave();
+    return focusNote(idx);
+  }
+  // 최상단으로 올림
+  notes[idx].z = ++nextZ;
+  el.style.zIndex = nextZ;
+  // 스크롤 & 하이라이트
+  if (isMobile) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    const target = el.offsetLeft - 40;
+    const targetY = el.offsetTop - 40;
+    area.scrollTo({ left: Math.max(0, target), top: Math.max(0, targetY), behavior: 'smooth' });
+  }
+  el.classList.remove('flash');
+  // 강제 reflow 후 다시 적용해야 애니메이션 재실행됨
+  void el.offsetWidth;
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 1200);
+  // 모바일에선 항목 클릭 후 패널 닫기
+  if (isMobile) {
+    const panel = document.getElementById('sidePanel');
+    panel.classList.remove('open');
+    document.body.classList.remove('panel-open');
+  }
 }
 
 // ===== PWA =====

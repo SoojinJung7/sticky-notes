@@ -255,6 +255,28 @@ body {
 .note.dragging { opacity: 0.85; box-shadow: 8px 8px 24px rgba(0,0,0,0.4); z-index: 9998 !important; }
 .note.hidden-note { display: none; }
 
+/* 최소화 상태: 헤더만 보이는 얇은 바 */
+.note.minimized {
+  min-height: 0 !important;
+  height: auto;
+}
+.note.minimized .note-body,
+.note.minimized .note-footer,
+.note.minimized .note-resize {
+  display: none;
+}
+.note.minimized .note-header {
+  background: rgba(0,0,0,0.12);
+}
+
+/* 클릭(패널에서 포커스 시) 강조 애니메이션 */
+@keyframes noteFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(90,158,107,0.0), 3px 3px 10px rgba(0,0,0,0.25); }
+  30%  { box-shadow: 0 0 0 6px rgba(90,158,107,0.55), 5px 5px 18px rgba(0,0,0,0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(90,158,107,0.0), 3px 3px 10px rgba(0,0,0,0.25); }
+}
+.note.flash { animation: noteFlash 1.1s ease-out; }
+
 .note-header {
   display: flex;
   align-items: center;
@@ -466,6 +488,105 @@ body {
   pointer-events: none;
 }
 
+/* ===== 사이드 패널 (목록 내비게이터) ===== */
+.side-panel {
+  position: fixed;
+  top: 48px;
+  right: 0;
+  bottom: 0;
+  width: 260px;
+  background: rgba(35,75,50,0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  z-index: 9990;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.25);
+}
+.side-panel.open { transform: translateX(0); }
+
+.side-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+.side-panel-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.panel-mini-btn, .panel-close-btn {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.panel-mini-btn:hover, .panel-close-btn:hover { background: rgba(255,255,255,0.3); }
+.panel-close-btn { padding: 4px 7px; font-size: 13px; }
+
+.side-panel-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 6px 12px;
+}
+
+.panel-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-top: 2px;
+  transition: background 0.12s;
+}
+.panel-item:hover { background: rgba(255,255,255,0.12); }
+.panel-item.is-minimized { opacity: 0.7; }
+.panel-item.hidden-note { display: none; }
+
+.panel-item-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.2);
+}
+.panel-item-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.panel-item-badge {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+}
+
+.side-panel-empty {
+  padding: 20px 16px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  text-align: center;
+  display: none;
+}
+
+/* 데스크톱: 패널 열리면 노트 영역이 우측 공간 양보 */
+@media (min-width: 601px) {
+  body.panel-open .notes-area { right: 260px; transition: right 0.25s ease; }
+  .notes-area { transition: right 0.25s ease; }
+}
+
 /* 모바일 반응형 */
 @media (max-width: 600px) {
   .toolbar {
@@ -533,6 +654,14 @@ body {
   .todo-del { opacity: 0.5; font-size: 13px; padding: 4px 6px; }
 
   .empty-state { position: relative; top: auto; left: auto; transform: none; margin-top: 25vh; }
+
+  /* 모바일: 사이드 패널은 화면 우측 대부분을 덮는 오버레이 */
+  .side-panel {
+    top: 0;
+    width: 86vw;
+    max-width: 360px;
+    z-index: 10000;
+  }
 }
 
 /* 설치 배너 */

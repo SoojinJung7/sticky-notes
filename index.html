@@ -38,6 +38,7 @@
   <button class="btn" id="undoBtn" title="실행 취소 (Ctrl+Z)" disabled>↩ Undo</button>
   <button class="btn" id="redoBtn" title="다시 실행 (Ctrl+Y)" disabled>↪ Redo</button>
   <button class="btn" id="refreshBtn" title="새로고침">↻</button>
+  <button class="btn" id="panelToggleBtn" title="목록 패널">☰</button>
   <div class="color-picker" id="colorPicker"></div>
   <div class="toolbar-right">
     <input type="text" class="search-box" id="searchBox" placeholder="검색...">
@@ -45,6 +46,18 @@
     <img class="user-avatar" id="userAvatar" style="display:none;" alt="user">
   </div>
 </div>
+
+<!-- 사이드 패널 (목록 내비게이터) -->
+<aside class="side-panel" id="sidePanel" aria-label="노트 목록">
+  <div class="side-panel-header">
+    <span class="side-panel-title">내 메모</span>
+    <button class="panel-mini-btn" id="panelMinAllBtn" title="모두 최소화">− 모두</button>
+    <button class="panel-mini-btn" id="panelExpandAllBtn" title="모두 펼치기">▢ 모두</button>
+    <button class="panel-close-btn" id="panelCloseBtn" title="닫기">✕</button>
+  </div>
+  <div class="side-panel-list" id="panelList"></div>
+  <div class="side-panel-empty" id="panelEmpty">메모가 없습니다</div>
+</aside>
 
 <!-- 유저 메뉴 -->
 <div class="user-menu" id="userMenu">
