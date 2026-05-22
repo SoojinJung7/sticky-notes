@@ -686,6 +686,16 @@ function setupEvents() {
     if (!noteEl) return;
     const idx = +noteEl.dataset.idx;
 
+    // 모바일 더블 토글 방지: 버튼 탭 시 touchstart의 시뮬레이션된 마우스 이벤트 차단
+    // (checkbox/text input은 기본 동작 유지해야 하므로 제외)
+    if (e.type === 'touchstart' && (
+      e.target.closest('.note-btn') ||
+      e.target.closest('.todo-del') ||
+      e.target.closest('.todo-add')
+    )) {
+      e.preventDefault();
+    }
+
     if (e.target.closest('.note-del-btn')) {
       e.stopPropagation();
       const title = notes[idx].title || '제목 없음';

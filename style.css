@@ -653,6 +653,16 @@ body {
     position: relative !important;
     margin-bottom: 12px;
     top: auto !important;
+    /* 내용만큼 늘어나도록 자체 overflow 해제 */
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  .note-body {
+    overflow-y: visible !important;
+    max-height: none !important;
+    flex: 0 0 auto !important;
   }
 
   .notes-area {
