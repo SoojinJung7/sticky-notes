@@ -366,11 +366,16 @@ function updateSpacer() {
   if (isMobile) return;
   const spacer = document.getElementById('notesAreaSpacer');
   if (!spacer) return;
+  const area = document.getElementById('notesArea');
   let maxRight = 0;
   let maxBottom = 0;
-  notes.forEach(note => {
-    const right = (note.x || 0) + (note.w || 240) + 40;
-    const bottom = (note.y || 0) + (note.h || 180) + 40;
+  notes.forEach((note, i) => {
+    // 노트는 내용에 맞춰 늘어나므로 가능하면 실제 렌더 크기를 사용
+    const el = area && area.querySelector(`.note[data-idx="${i}"]`);
+    const w = el ? el.offsetWidth : (note.w || 240);
+    const h = el ? el.offsetHeight : (note.h || 180);
+    const right = (note.x || 0) + w + 40;
+    const bottom = (note.y || 0) + h + 40;
     if (right > maxRight) maxRight = right;
     if (bottom > maxBottom) maxBottom = bottom;
   });
@@ -1069,7 +1074,14 @@ function arrangeNotes() {
     return;
   }
 
-  // 데스크톱: 좌측에서 시작해 세로 컬럼으로 쌓고, 화면 높이 초과 시 다음 컬럼
+  // 데스크톱: 좌측에서 시작해 세로 컬럼으로 쌓고, 화면 높이 초과 시 다음 컬럼.
+  // 노트는 내용에 맞춰 늘어나므로 저장된 note.h가 아니라 '실제 렌더 높이'를 측정해
+  // 쌓아야 겹치지 않는다. 먼저 정렬된 순서로 렌더한 뒤 높이를 잰다.
+  notes = ordered;
+  notes.forEach((n, i) => { n.z = 100 + i; });
+  nextZ = 100 + notes.length;
+  renderAll();
+
   const PAD_L = 20, PAD_T = 20;
   const GAP_Y = 12, GAP_GROUP = 24, COL_GAP = 16;
   const area = document.getElementById('notesArea');
@@ -1080,16 +1092,17 @@ function arrangeNotes() {
   let colMaxW = 0;
   let prevColor = null;
 
-  ordered.forEach(note => {
-    const w = note.w || 240;
-    const h = note.minimized ? 36 : (note.h || 180);
+  notes.forEach((note, i) => {
+    const el = area.querySelector(`.note[data-idx="${i}"]`);
+    const w = el ? el.offsetWidth : (note.w || 240);
+    const h = el ? el.offsetHeight : (note.minimized ? 36 : (note.h || 180));
 
     // 색상 그룹 사이엔 살짝 더 큰 여백 (이미 컬럼 위가 아닐 때만)
     if (prevColor !== null && note.color !== prevColor && cursorY > PAD_T) {
       cursorY += GAP_GROUP - GAP_Y;
     }
 
-    // 컬럼이 넘치면 다음 컬럼으로
+    // 컬럼이 넘치면 다음 컬럼으로 (한 노트가 컬럼 위에 처음 놓일 때는 넘겨도 그대로 둠)
     if (cursorY > PAD_T && cursorY + h > maxY) {
       cursorX += colMaxW + COL_GAP;
       cursorY = PAD_T;
@@ -1098,16 +1111,17 @@ function arrangeNotes() {
 
     note.x = cursorX;
     note.y = cursorY;
+    if (el) {
+      el.style.left = cursorX + 'px';
+      el.style.top = cursorY + 'px';
+    }
+
     cursorY += h + GAP_Y;
     if (w > colMaxW) colMaxW = w;
     prevColor = note.color;
   });
 
-  notes = ordered;
-  notes.forEach((n, i) => { n.z = 100 + i; });
-  nextZ = 100 + notes.length;
-
-  renderAll();
+  updateSpacer();
   scheduleSave();
   showToast('정리 완료 — Ctrl+Z로 원복');
 }
@@ -1138,13 +1152,90 @@ function renderPanel() {
     item.className = 'panel-item' + (note.minimized ? ' is-minimized' : '');
     item.dataset.idx = i;
     item.innerHTML = `
+      <span class="panel-item-handle" title="드래그하여 순서 변경">⠿</span>
       <span class="panel-item-dot" style="background:${note.color}"></span>
       <span class="panel-item-title">${escHtml(getDisplayTitle(note))}</span>
       ${note.minimized ? '<span class="panel-item-badge" title="최소화됨">▢</span>' : ''}
     `;
-    item.addEventListener('click', () => focusNote(i));
+    item.addEventListener('click', () => {
+      if (panelJustDragged) return; // 방금 드래그로 재정렬한 경우 클릭 무시
+      focusNote(i);
+    });
+    item.querySelector('.panel-item-handle')
+      .addEventListener('pointerdown', e => startPanelDrag(e, item));
     list.appendChild(item);
   });
+}
+
+// ===== 패널 항목 드래그 재정렬 =====
+let panelDrag = null;
+let panelJustDragged = false;
+
+function startPanelDrag(e, item) {
+  if (e.button !== undefined && e.button !== 0) return; // 좌클릭/터치만
+  e.preventDefault();
+  panelDrag = { item, moved: false };
+
+  const onMove = ev => onPanelDragMove(ev);
+  const onUp = ev => {
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    onPanelDragEnd(ev);
+  };
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+}
+
+function panelItemAfter(list, y) {
+  // 포인터 y보다 아래에 있는 첫 항목(= 드래그 항목이 그 앞에 삽입돼야 할 대상)
+  const els = [...list.querySelectorAll('.panel-item:not(.panel-dragging)')];
+  let closest = { offset: -Infinity, element: null };
+  for (const el of els) {
+    const box = el.getBoundingClientRect();
+    const offset = y - (box.top + box.height / 2);
+    if (offset < 0 && offset > closest.offset) closest = { offset, element: el };
+  }
+  return closest.element;
+}
+
+function onPanelDragMove(ev) {
+  if (!panelDrag) return;
+  ev.preventDefault();
+  if (!panelDrag.moved) {
+    panelDrag.moved = true;
+    panelDrag.item.classList.add('panel-dragging');
+    document.body.classList.add('panel-reordering');
+  }
+  const list = document.getElementById('panelList');
+  const after = panelItemAfter(list, ev.clientY);
+  if (after == null) list.appendChild(panelDrag.item);
+  else if (after !== panelDrag.item) list.insertBefore(panelDrag.item, after);
+}
+
+function onPanelDragEnd() {
+  const drag = panelDrag;
+  panelDrag = null;
+  if (!drag) return;
+  if (!drag.moved) return; // 단순 핸들 클릭 → 아무 일 없음
+
+  drag.item.classList.remove('panel-dragging');
+  document.body.classList.remove('panel-reordering');
+
+  // 현재 DOM 순서대로 notes 재배열 (data-idx는 기존 인덱스)
+  const list = document.getElementById('panelList');
+  const newOrder = [...list.querySelectorAll('.panel-item')].map(el => +el.dataset.idx);
+  if (newOrder.length === notes.length) {
+    pushUndo();
+    notes = newOrder.map(i => notes[i]);
+    renderAll();
+    scheduleSave();
+  } else {
+    renderPanel(); // 길이 불일치(검색 필터 등) → 원상 복구
+  }
+
+  // 재정렬 직후 발생하는 click 이벤트가 focusNote를 트리거하지 않도록 한 틱 억제
+  panelJustDragged = true;
+  setTimeout(() => { panelJustDragged = false; }, 0);
 }
 
 function focusNote(idx) {

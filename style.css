@@ -554,6 +554,29 @@ body {
 .panel-item:hover { background: rgba(255,255,255,0.12); }
 .panel-item.is-minimized { opacity: 0.7; }
 .panel-item.hidden-note { display: none; }
+.panel-item.panel-dragging {
+  opacity: 0.85;
+  background: rgba(255,255,255,0.2);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* 드래그 핸들 */
+.panel-item-handle {
+  flex-shrink: 0;
+  color: rgba(255,255,255,0.4);
+  font-size: 14px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  padding: 0 2px;
+}
+.panel-item-handle:active { cursor: grabbing; }
+.panel-item:hover .panel-item-handle { color: rgba(255,255,255,0.7); }
+
+/* 재정렬 중 텍스트 선택 방지 */
+body.panel-reordering { user-select: none; }
+body.panel-reordering .panel-item { transition: none; }
 
 .panel-item-dot {
   width: 12px;
