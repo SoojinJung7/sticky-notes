@@ -882,3 +882,133 @@ body.panel-reordering .panel-item { transition: none; }
   animation: spin 0.6s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== 임베디드(필립톡) 테마 — body.embedded 스코프, 단독 실행에는 영향 없음 ===== */
+
+/* 배경: 필립톡 톤 그라디언트 + 중앙 로고 워터마크.
+   워터마크는 iframe이 필립톡과 같은 오리진에서 서빙될 때만 절대경로가 먹힌다 —
+   단독(GitHub Pages) 실행에서는 body.embedded 자체가 안 붙으므로 이 규칙도, 이미지 요청도 아예 발생하지 않는다. */
+body.embedded {
+  background: radial-gradient(120% 120% at 50% 30%, #eceef1 0%, #d3d7dd 55%, #b7bdc6 100%);
+}
+body.embedded::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1; /* 콘텐츠(정적 요소 포함) 어떤 것도 가리지 않도록 배경 바로 위, 그 외 전부 아래 */
+  pointer-events: none;
+  background-image: url('/philip-logo-full-trim.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: min(60vw, 720px);
+  opacity: 0.3;
+}
+
+/* 툴바: 글라스 패널 + 밝은 배경 위에서 읽히는 진회색 텍스트 */
+body.embedded .toolbar {
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  border-bottom: 1px solid rgba(255,255,255,0.45);
+  box-shadow: 0 8px 30px rgba(80,80,90,0.1);
+}
+body.embedded .toolbar-title { color: #374151; text-shadow: none; }
+body.embedded .btn {
+  background: rgba(255,255,255,0.35);
+  color: #374151;
+}
+body.embedded .btn:hover { background: rgba(255,255,255,0.5); }
+body.embedded .btn:active { background: rgba(255,255,255,0.6); }
+body.embedded .color-dot { border-color: rgba(55,65,81,0.35); }
+body.embedded .color-dot:hover,
+body.embedded .color-dot.active { border-color: #374151; }
+body.embedded .search-box {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.5);
+  color: #374151;
+}
+body.embedded .search-box::placeholder { color: rgba(55,65,81,0.5); }
+body.embedded .search-box:focus { background: rgba(255,255,255,0.75); }
+
+/* 주요 액션(새 메모 추가): 브랜드 오렌지 글라스 */
+body.embedded #addBtn {
+  background: rgba(234,88,12,0.72);
+  backdrop-filter: blur(8px) saturate(1.4);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.4);
+  color: #fff;
+}
+body.embedded #addBtn:hover { background: rgba(234,88,12,0.85); }
+
+/* 노트 카드: 종이색은 기능(색별 정리)이라 그대로 살리고, 살짝 반투명 + 부드러운 그림자만 얹는다.
+   backdrop-filter는 절대 쓰지 않는다 — 노트가 수십 장 겹칠 수 있어 blur 중첩이 스크롤/드래그 성능을 크게 깎는다. */
+body.embedded .note {
+  opacity: 0.92;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(80,80,90,0.18);
+}
+body.embedded .note:hover { box-shadow: 0 12px 32px rgba(80,80,90,0.25); }
+
+/* 사이드 패널 */
+body.embedded .side-panel {
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  border-left: 1px solid rgba(255,255,255,0.45);
+  box-shadow: 0 8px 30px rgba(80,80,90,0.1);
+  color: #374151;
+}
+body.embedded .side-panel-header { border-bottom-color: rgba(55,65,81,0.15); }
+body.embedded .side-panel-title { color: #374151; }
+body.embedded .panel-mini-btn,
+body.embedded .panel-close-btn {
+  background: rgba(255,255,255,0.35);
+  color: #374151;
+}
+body.embedded .panel-mini-btn:hover,
+body.embedded .panel-close-btn:hover { background: rgba(255,255,255,0.5); }
+body.embedded .panel-item:hover { background: rgba(255,255,255,0.25); }
+body.embedded .panel-item.panel-dragging { background: rgba(255,255,255,0.4); }
+body.embedded .panel-item-handle { color: rgba(55,65,81,0.4); }
+body.embedded .panel-item:hover .panel-item-handle { color: rgba(55,65,81,0.7); }
+body.embedded .panel-item-badge { color: rgba(55,65,81,0.6); }
+body.embedded .side-panel-empty { color: rgba(55,65,81,0.6); }
+
+/* 유저 메뉴 */
+body.embedded .user-menu {
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  border: 1px solid rgba(255,255,255,0.45);
+  box-shadow: 0 8px 30px rgba(80,80,90,0.1);
+}
+body.embedded .user-menu-item { color: #374151; }
+body.embedded .user-menu-item:hover { background: rgba(255,255,255,0.35); }
+body.embedded .user-menu-name {
+  color: rgba(55,65,81,0.6);
+  border-bottom-color: rgba(55,65,81,0.15);
+}
+
+/* 색상 팔레트 팝업 */
+body.embedded .palette-popup {
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  border: 1px solid rgba(255,255,255,0.45);
+  box-shadow: 0 8px 30px rgba(80,80,90,0.1);
+}
+
+/* 온보딩 카드: 글라스 패널로, body의 필립톡 그라디언트가 블러되어 비친다 */
+body.embedded .onboarding {
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+}
+body.embedded .onboarding h1 { color: #374151; text-shadow: none; }
+body.embedded .onboarding p { color: rgba(55,65,81,0.75); }
+body.embedded .ob-btn-local {
+  background: rgba(255,255,255,0.35);
+  color: #374151;
+  border: 1px solid rgba(255,255,255,0.5);
+}
+body.embedded .ob-btn-local:hover { background: rgba(255,255,255,0.5); }

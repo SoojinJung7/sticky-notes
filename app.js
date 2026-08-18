@@ -35,6 +35,8 @@ const isMobile = window.innerWidth <= 600;
 
 // 필립톡 iframe 안에 임베드되어 실행 중인지 — 임베디드 SSO와 SW 등록 분기에 쓴다.
 const EMBEDDED = window.self !== window.top;
+// 임베디드일 때만 body.embedded를 붙여 필립톡 글래스모픽 테마(style.css)를 켠다 — 단독 실행은 클래스가 안 붙어 영향 없음.
+if (EMBEDDED) document.body.classList.add('embedded');
 
 let notes = [];
 let selectedColor = COLORS[0].hex;
