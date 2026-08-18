@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -32,6 +32,9 @@ const COLORS = [
 const STORAGE_KEY = 'sticky-notes-data';
 const MODE_KEY = 'sticky-notes-mode';
 const isMobile = window.innerWidth <= 600;
+
+// 필립톡 iframe 안에 임베드되어 실행 중인지 — 임베디드 SSO와 SW 등록 분기에 쓴다.
+const EMBEDDED = window.self !== window.top;
 
 let notes = [];
 let selectedColor = COLORS[0].hex;
@@ -340,11 +343,29 @@ function hideLoading() {
 }
 
 // ===== 유저 UI =====
+// 이니셜 아바타 생성 (photoURL이 없는 계정용 — 예: SSO 커스텀 토큰으로 만들어진
+// 구글 프로필 없는 계정). data URI SVG라 index.html의 <img> 구조를 그대로 쓴다.
+function initialAvatarDataUri(label) {
+  const ch = (label || '').trim().charAt(0).toUpperCase() || '?';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="16" fill="#8FBF7A"/><text x="16" y="21" font-family="sans-serif" font-size="15" font-weight="600" fill="#fff" text-anchor="middle">${ch}</text></svg>`;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+
 function showUserUI(user) {
   const avatar = document.getElementById('userAvatar');
-  avatar.src = user.photoURL || '';
-  avatar.style.display = user.photoURL ? 'block' : 'none';
-  document.getElementById('userMenuName').textContent = user.displayName || user.email;
+  // EMBEDDED가 아니면 기존 로직 그대로 — iframe 밖 동작은 한 글자도 바꾸지 않는다.
+  if (!EMBEDDED) {
+    avatar.src = user.photoURL || '';
+    avatar.style.display = user.photoURL ? 'block' : 'none';
+    document.getElementById('userMenuName').textContent = user.displayName || user.email;
+    return;
+  }
+  // 임베디드: SSO 커스텀 토큰 계정은 구글 프로필(photoURL/displayName/email)이
+  // 없을 수 있으므로 이니셜 아바타와 기본 라벨로 방어한다.
+  const nameLabel = user.displayName || user.email || '사용자';
+  avatar.src = user.photoURL || initialAvatarDataUri(nameLabel);
+  avatar.style.display = 'block';
+  document.getElementById('userMenuName').textContent = nameLabel;
 }
 
 function hideUserUI() {
@@ -393,6 +414,27 @@ function enforceMobileAccordion() {
   notes.forEach(n => { if (n !== keep) n.minimized = true; });
 }
 
+// ===== 임베디드 SSO (필립톡 iframe 전용) =====
+// 필립톡에 이미 로그인한 사용자는 다시 로그인할 필요 없이, 부모 앱이 같은
+// 오리진에 열어둔 토큰 endpoint에서 Firebase 커스텀 토큰을 받아 자동 로그인한다.
+// GitHub Pages 등 단독 실행에서는 이 endpoint가 존재하지 않아 404 → null을
+// 반환하고 기존 온보딩 흐름으로 넘어간다(단독 사용자에게는 아무 변화 없음).
+let ssoAttempted = false;
+async function trySsoLogin() {
+  if (!EMBEDDED || ssoAttempted) return null;
+  ssoAttempted = true;
+  try {
+    const res = await fetch('/api/stickynotes/token');
+    if (!res.ok) return null;
+    const { token } = await res.json();
+    const result = await signInWithCustomToken(auth, token);
+    return result.user;
+  } catch (e) {
+    console.warn('SSO login unavailable:', e);
+    return null;
+  }
+}
+
 // ===== 초기화 =====
 async function init() {
   buildColorPicker();
@@ -421,12 +463,31 @@ async function init() {
         enforceMobileAccordion();
         renderAll();
       } else {
-        // 토큰 만료 등 → 온보딩으로
+        // 토큰 만료 등 — 임베디드면 SSO로 조용히 재로그인 시도, 안 되면 온보딩으로.
+        const ssoUser = await trySsoLogin();
+        if (ssoUser) return; // 성공 → onAuthStateChanged가 user와 함께 다시 불린다
         authMode = null;
         localStorage.removeItem(MODE_KEY);
         showOnboarding();
       }
     });
+  } else if (EMBEDDED) {
+    // 첫 방문(임베디드) — 필립톡 세션으로 자동 로그인 시도. 실패하면 일반 온보딩.
+    showLoading();
+    const ssoUser = await trySsoLogin();
+    hideLoading();
+    if (ssoUser) {
+      currentUser = ssoUser;
+      authMode = 'google';
+      localStorage.setItem(MODE_KEY, 'google');
+      showUserUI(currentUser);
+      hideOnboarding();
+      notes = await loadNotesCloud();
+      enforceMobileAccordion();
+      renderAll();
+    } else {
+      showOnboarding();
+    }
   } else {
     // 첫 방문
     showOnboarding();
@@ -1306,7 +1367,10 @@ function setupPWA() {
   document.getElementById('installDismiss').addEventListener('click', () => {
     document.getElementById('installBanner').classList.remove('show');
   });
-  if ('serviceWorker' in navigator) {
+  // 필립톡 iframe 안에서는 SW 등록을 건너뛴다 — 이 앱의 SW와 필립톡 자체 SW가
+  // 같은 브라우저 안에서 동시에 캐시를 관리하면 스테일 캐시가 얽힐 수 있다.
+  // (원본을 직접 열 때는 EMBEDDED가 false라 기존 동작 그대로다.)
+  if ('serviceWorker' in navigator && !EMBEDDED) {
     navigator.serviceWorker.register('sw.js').then(reg => {
       // 한 시간마다 새 버전 체크
       setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
