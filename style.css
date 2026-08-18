@@ -901,7 +901,9 @@ body.embedded::before {
   background-repeat: no-repeat;
   background-position: center;
   background-size: min(60vw, 720px);
-  opacity: 0.3;
+  /* 유리판 뒤에 있는 것처럼 — 로고 자체를 흐리고 투명도도 낮춘다(사용자 피드백: 원판이 너무 선명/진함) */
+  filter: blur(7px);
+  opacity: 0.22;
 }
 
 /* 툴바: 글라스 패널 + 밝은 배경 위에서 읽히는 진회색 텍스트 */
